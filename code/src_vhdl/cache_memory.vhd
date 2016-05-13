@@ -37,7 +37,7 @@ entity cache_memory is
 
     port (
         clk_i             : in  std_logic;
-        reset             : in  std_logic;
+        reset_i           : in  std_logic;
         --agent interface------------------ 
         agent_i           : in  agent_to_cache_t;
         agent_o           : out cache_to_agent_t;
@@ -56,11 +56,12 @@ end cache_memory;
 
 
 architecture struct of cache_memory is
-
-
+    constant NUMBER_OF_WORDS_IN_CACHE_LINE : integer := 16 -- Nombre de mots par ligne de cache
+    type cache_type is array (0 to (2**INDEX_SIZE)-1) of std_logic_vector(NUMBER_OF_WORDS_IN_CACHE_LINE * DATA_SIZE);
+    
+    signal cache : cache_type;
+    
 begin
-
-
     -- These asserts are used by simulation in order to check the generic 
     -- parameters with the instanciation of record ports
     assert agent_i.addr'length = ADDR_SIZE report "Address size do not match" severity failure;
@@ -71,6 +72,13 @@ begin
     assert mem_o.burst_range'length = ADDR_SIZE report "Burst range size do not match" severity failure;
     assert mem_o.data'length = DATA_SIZE report "Data size do not match" severity failure;
 
+    Cache_process : process (clk_i, reset_i) is
+    begin
+      if (reset_i = '1') then
+      elsif rising_edge(clk_i) then
+        
+      end if;
+    end process;
 
 end struct;
 
