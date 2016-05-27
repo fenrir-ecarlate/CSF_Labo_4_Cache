@@ -6,7 +6,7 @@
 --
 -- Description  : Cache memory.
 -- 
--- Auteur       : Yann Thoma
+-- Auteur       : João Domingues, Rick Wertenbroek sur chablon de Yann Thoma
 -- Date         : 12.05.2016
 -- Version      : 0.1 ports
 -- 
@@ -14,7 +14,8 @@
 --              :  
 -- 
 --| Modifications |------------------------------------------------------------
---                                          
+-- Version        Date      Auteur      Description
+-- 1.0            20.05.16  RWK         Début du laboratoire
 -------------------------------------------------------------------------------
 
 
