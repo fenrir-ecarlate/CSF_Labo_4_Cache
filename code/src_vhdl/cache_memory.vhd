@@ -121,15 +121,22 @@ begin
         state_s <= RESET;
         next_state_s <= RESET;
       elsif rising_edge(clk_i) then
+        variable index_v : integer := to_integer(unsigned(cache_index_s));
+        variable block_off_v : integer := to_integer(unsigned(cache_b_off_s));
+        
         case state_s is
-          when RESET =>
+          
+          when RESET => -- Etat de départ
             next_state_s <= INIT;
-          when INIT =>
+            
+          when INIT => -- Initialisations
             valid_bits <= (others => '0'); -- Ceci suffit la cache n'a pas
                                            -- besoin d'être mise à zéro
+            dirty_bits <= (others => '0'); -- Tout est beau propre !
             fsm_dready_out_s <= '0';
             fsm_busy_out_s <= '0';
             next_state_s <= WAIT_FOR_DEMAND;
+            
           when WAIT_FOR_DEMAND =>
             if (fsm_read_s = '1') then
               next_state_s <= READ_CACHE;
@@ -140,35 +147,48 @@ begin
             else
               next_state_s <= WAIT_FOR_DEMAND;
             end if;
+            
           when READ_CACHE =>
-            if ((tags(to_integer(unsigned(cache_index_s))) = cache_tag_s) and valid_bits(to_integer(unsigned(cache_index_s))) = '1') then
+            if (tags(index_v) = cache_tag_s and valid_bits(index_v) = '1') then
               next_state_s <= GIVE_DATA;
             else
               next_state_s <= READ_MEMORY;
             end if;
+            
           when GIVE_DATA =>
-            fsm_data_out_s <= cache(to_integer(unsigned(cache_index_s)))((to_integer(unsigned(cache_b_off_s))+1) * DATA_SIZE - 1 downto to_integer(unsigned(cache_b_off_s)) * DATA_SIZE);
+            fsm_data_out_s <= cache(index_v)((block_off_v+1) * DATA_SIZE - 1 downto block_off_v * DATA_SIZE);
             fsm_dready_out_s <= '1';
             next_state_s <= WAIT_FOR_DEMAND;
+            
           when READ_MEMORY =>
             -- Chercher la ligne entière en mémoire et la mettre dans le cache
+            valid_bits(index_v) <= '1'; -- Mise à jour du valid
+            tags(index_v) <= cache_tag_s; -- Mise à jour du tag
             next_state_s <= GIVE_DATA;
-          when CHECK_DIRTY =>
-            if (dirty_bits(to_integer(unsigned(cache_index_s))) = '1') then
+            
+          when CHECK_DIRTY => -- Si dirty on doit stocker en mémoire
+            if (dirty_bits(index_v) = '1' and valid_bits(index_v) = '1') then
               next_state_s <= WRITE_MEMORY;
             else
               next_state_s <= READ_BEFORE_WRITE;
             end if;
+            
           when WRITE_MEMORY =>
             -- Ecrire la ligne en mémoire
             next_state_s <= READ_BEFORE_WRITE;
+            
           when READ_BEFORE_WRITE =>
             -- Récuperer la ligne de cache en mémoire avant d'écrire un mot dessus
+            valid_bits(index_v) <= '1'; -- Mise à jour du valid
+            tags(index_v) <= cache_tag_s; -- Mise à jour du tag
             next_state_s <= WRITE_CACHE_WORD;
+            
           when WRITE_CACHE_WORD =>
-            cache(to_integer(unsigned(cache_index_s)))((to_integer(unsigned(cache_b_off_s))+1) * DATA_SIZE - 1 downto to_integer(unsigned(cache_b_off_s)) * DATA_SIZE) <= fsm_word_in_s;
+            cache(index_v)(block_off_v+1) * DATA_SIZE - 1 downto block_off_v * DATA_SIZE) <= fsm_word_in_s;
+            dirty_bits(index_v) <= '1'; -- Ecriture en cache donc dirty
             fsm_busy_out_s <= '0';
             next_state_s <= WAIT_FOR_DEMAND;
+            
         end case;
             
             
