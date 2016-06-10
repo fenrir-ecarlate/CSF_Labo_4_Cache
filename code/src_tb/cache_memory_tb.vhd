@@ -1,14 +1,14 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
+-- Company: HEIG-VD REDS
+-- Engineer: JoÃ£o Domingues, Rick Wertenbroek
 -- 
 -- Create Date: 18.02.2016 09:56:53
 -- Design Name: 
 -- Module Name: cache_memory_tb - Behavioral
--- Project Name: 
--- Target Devices: 
+-- Project Name: Memoire Cache
+-- Target Devices: (This is a testbench !)
 -- Tool Versions: 
--- Description: 
+-- Description: Test Bench for Cache Memory
 -- 
 -- Dependencies: 
 -- 
@@ -80,6 +80,8 @@ architecture testbench of cache_memory_tb is
 
     signal monitor_obs    : cache_monitor_t;                                  
 
+    signal synchro_verif  : std_logic;
+    signal verification_going : std_logic;
 begin
         
     dut : cache_memory
@@ -106,7 +108,40 @@ begin
         mon_info_o => monitor_obs
     );
 
+    -- Processus de commande et synchronisation
+    chef_d_orchestre: process
+    begin
+      synchro_verif <= '1';
+      wait until rising_edge(verification_going);
+      loop
+        wait for 10 ns;
+        synchro_verif <= '0';
+        wait for 10 ns;
+        synchro_verif <= '1';
+        if verification_going = '0' then
+          wait for 20 ns;
+          report "Fin de la verification !";
+          wait;
+        end if;
+      end loop;
+    end process;
 
+    stimuli: process
+    begin
+
+    end process;
+
+    verification: process
+      wait until rising_edge(verification_going); -- Pourrait être fait autrement
+
+      loop
+        wait until rising_edge(synchro_verif); -- On est synchronisé avec tout
+                                               -- le monde
+
+      end loop;
+
+      wait;
+    end process;
 
 end testbench;
 
