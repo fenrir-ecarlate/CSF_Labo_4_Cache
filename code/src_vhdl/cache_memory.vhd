@@ -73,6 +73,7 @@ architecture struct of cache_memory is
 
     -- FSM
     signal state_s, next_state_s : STATE_TYPE;
+    signal fsm_dready_out_s, fsm_busy_out_s, fsm_read_s, fsm_write_s : std_logic;
     
     -- Signaux d'entrée de la cache
     signal cache_index_s : std_logic_vector(INDEX_SIZE-1 downto 0);
@@ -95,6 +96,12 @@ begin
     assert mem_o.burst_range'length = ADDR_SIZE report "Burst range size do not match" severity failure;
     assert mem_o.data'length = DATA_SIZE report "Data size do not match" severity failure;
 
+    agent_o.busy <= fsm_busy_out_s;
+    agent_o.dready <= fsm_dready_out_s;
+    
+    fsm_write_s <= agent_i.wr;
+    fsm_read_s <= agent_i.rd;
+    
     cache_fsm_process : process (clk_i, reset_i) is
     begin
       if (reset_i = '1') then
@@ -114,7 +121,7 @@ begin
             if (fsm_read_s = '1') then
               next_state_s <= READ_CACHE;
               fsm_dready_out_s <= '0';
-            elsif (fsm_write = '1') then
+            elsif (fsm_write_s = '1') then
               next_state_s <= CHECK_DIRTY;
               fsm_busy_out_s <= '1';
             else
