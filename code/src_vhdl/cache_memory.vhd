@@ -59,6 +59,12 @@ end cache_memory;
 architecture struct of cache_memory is
     constant NUMBER_OF_WORDS_IN_CACHE_LINE : integer := 16; -- Nombre de mots par ligne de cache
     constant OFFSET_SIZE : integer := 4; -- LOG2(NUMBER_OF_WORDS_IN_CACHE_LINE)
+    constant TAG_HIGH : integer := ADDR_SIZE - 1;
+    constant TAG_LOW : integer := TAG_HIGH - TAG_SIZE;
+    constant INDEX_HIGH : integer := ADDR_SIZE - TAG_SIZE - 1;
+    constant INDEX_LOW : integer := INDEX_HIGH - INDEX_SIZE;
+    constant BLOCK_HIGH : integer := INDEX_LOW - 1;
+    constant BLOCK_LOW : integer := BLOCK_HIGH - OFFSET_SIZE;
     
     type cache_type is array (0 to (2**INDEX_SIZE)-1) of std_logic_vector((NUMBER_OF_WORDS_IN_CACHE_LINE * DATA_SIZE)-1 downto 0);
     type bit_array_type is array (0 to (2**INDEX_SIZE)-1) of std_logic;
@@ -98,9 +104,16 @@ begin
 
     agent_o.busy <= fsm_busy_out_s;
     agent_o.dready <= fsm_dready_out_s;
+    agent_o.data <= fsm_data_out_s;
     
     fsm_write_s <= agent_i.wr;
     fsm_read_s <= agent_i.rd;
+    fsm_word_in_s <= agent_i.data;
+
+    -- Décomposition de l'adresse :
+    cache_tag_s <= agent_i.addr(TAG_HIGH downto TAG_LOW);
+    cache_index_s <= agent_i.addr(INDEX_HIGH downto INDEX_LOW);
+    cache_b_off_s <= agent_i.addr(BLOCK_HIGH downto BLOCK_LOW);
     
     cache_fsm_process : process (clk_i, reset_i) is
     begin
