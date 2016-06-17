@@ -66,6 +66,21 @@ architecture testbench of cache_memory_tb is
     );
     end component;
 
+    component memory_emul_tb is
+    generic(
+      ADDR_SIZE         : integer :=11;
+      INDEX_SIZE        : integer :=5;   --Memory depth = 2^INDEX_SIZE                
+      TAG_SIZE          : integer :=6;   --TAG_SIZE must have the same size than the DDR3 memory @ddress - INDEX
+      DATA_SIZE         : integer :=8    --Data field must have the same size than the DDR3 memory data
+      );
+    port(
+      clk_i               : in std_logic;
+      reset_i             : in std_logic;
+
+      mem_o               : out mem_to_cache_t;
+      mem_i               : in cache_to_mem_t);
+    end component;
+
     signal clk_sti : std_logic;
     signal reset_sti : std_logic;
     
@@ -82,6 +97,8 @@ architecture testbench of cache_memory_tb is
 
     signal synchro_verif  : std_logic;
     signal verification_going : std_logic;
+
+    constant CLK_PERIOD : time := 1 ns;
 begin
         
     dut : cache_memory
@@ -101,47 +118,70 @@ begin
         
         --DDR interface-----
         mem_i => from_mem_obs,
-   	 	mem_o => cache_to_mem_obs,          
+        mem_o => cache_to_mem_obs,          
         --DDR interface-----
         
         --|monitoring|------
         mon_info_o => monitor_obs
     );
 
+    memory : memory_emul_tb
+    generic map(
+      ADDR_SIZE  => ADDR_SIZE,
+      INDEX_SIZE => INDEX_SIZE,
+      TAG_SIZE   => TAG_SIZE,
+      DATA_SIZE  => DATA_SIZE
+      )
+    port map(
+      clk_i   => clk_sti,
+      reset_i => reset_sti,
+
+      mem_o   => from_mem_obs,
+      mem_i   => cache_to_mem_obs
+    );
+
+    clk_process : process
+    begin
+      clk_sti <= '0';
+      wait for CLK_PERIOD / 2;
+      clk_sti <= '1';
+      wait for CLK_PERIOD / 2;
+    end process;
+    
     -- Processus de commande et synchronisation
-    chef_d_orchestre: process
-    begin
-      synchro_verif <= '1';
-      wait until rising_edge(verification_going);
-      loop
-        wait for 10 ns;
-        synchro_verif <= '0';
-        wait for 10 ns;
-        synchro_verif <= '1';
-        if verification_going = '0' then
-          wait for 20 ns;
-          report "Fin de la verification !";
-          wait;
-        end if;
-      end loop;
-    end process;
+    --chef_d_orchestre: process
+    --begin
+    --  synchro_verif <= '1';
+    --  wait until rising_edge(verification_going);
+    --  loop
+    --    wait for 10 ns;
+    --    synchro_verif <= '0';
+    --    wait for 10 ns;
+    --    synchro_verif <= '1';
+    --    if verification_going = '0' then
+    --      wait for 20 ns;
+    --      report "Fin de la verification !";
+    --      wait;
+    --    end if;
+    --  end loop;
+    --end process;
 
-    stimuli: process
-    begin
+    --stimuli: process
+    --begin
 
-    end process;
+    --end process;
 
-    verification: process
-      wait until rising_edge(verification_going); -- Pourrait être fait autrement
+    --verification: process
+    --  wait until rising_edge(verification_going); -- Pourrait être fait autrement
 
-      loop
-        wait until rising_edge(synchro_verif); -- On est synchronisé avec tout
-                                               -- le monde
+    --  loop
+    --    wait until rising_edge(synchro_verif); -- On est synchronisé avec tout
+    --                                           -- le monde
 
-      end loop;
+    --  end loop;
 
-      wait;
-    end process;
+    --  wait;
+    --end process;
 
 end testbench;
 
