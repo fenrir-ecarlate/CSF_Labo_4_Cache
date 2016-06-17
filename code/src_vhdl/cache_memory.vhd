@@ -86,12 +86,14 @@ architecture struct of cache_memory is
 
      generic(
         ADDR_SIZE         : integer := 11;
-        DATA_SIZE         : integer := 8);
+        DATA_SIZE         : integer := 8;
+        LINE_SIZE         : integer := 16);
 
      port (
         clk_i             : in  std_logic;
         reset_i           : in  std_logic;
         start_i           : in  std_logic;
+        cnt_burst_o       : out std_logic_vector(ilogup(LINE_SIZE)-1 downto 0); 
         data_i            : in  std_logic_vector(DATA_SIZE -1 downto 0);
         data_ok_o         : out std_logic;
         done_o            : out std_logic;
@@ -167,6 +169,7 @@ begin
             clk_i    => clk_i,
             reset_i  => reset_i,
             start_i  => start_r_s,
+            cnt_burst_o => cnt_burst_r_s,
             data_o   => data_r_s,
             data_ok_o=> data_ok_r_s,
             done_o   => done_r_s,
@@ -175,11 +178,12 @@ begin
        );
        
     Ctrl_write: mem_ctrl_write_mss
-        generic map(ADDR_SIZE => ADDR_SIZE, DATA_SIZE => DATA_SIZE)
+        generic map(ADDR_SIZE => ADDR_SIZE, DATA_SIZE => DATA_SIZE, LINE_SIZE => NUMBER_OF_WORDS_IN_CACHE_LINE)
         port map(
             clk_i    => clk_i,
             reset_i  => reset_i,
             start_i  => start_w_s,
+            cnt_burst_o => cnt_burst_w_s,
             data_i   => data_w_s,
             data_ok_o=> data_ok_w_s,
             done_o   => done_w_s,

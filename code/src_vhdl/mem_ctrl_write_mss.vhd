@@ -25,18 +25,20 @@ USE ieee.numeric_std.ALL;
 use IEEE.math_real.all;
 --library work;
 use work.cmf_pkg.all;
-
+use work.log_pkg.all;
 
 entity mem_ctrl_write_mss is
 
     generic(
         ADDR_SIZE         : integer := 11;
-        DATA_SIZE         : integer := 8);
+        DATA_SIZE         : integer := 8;
+        LINE_SIZE         : integer := 16);
 
     port (
         clk_i             : in  std_logic;
         reset_i           : in  std_logic;
         start_i           : in  std_logic;
+        cnt_burst_o       : out std_logic_vector(ilogup(LINE_SIZE)-1 downto 0);
         data_i            : in  std_logic_vector(DATA_SIZE -1 downto 0);
         data_ok_o         : out std_logic;
         done_o            : out std_logic;
@@ -56,7 +58,7 @@ architecture struct of mem_ctrl_write_mss is
     
     -- FSM
     signal state_s, next_state_s : STATE_TYPE;
-    signal cnt_burst : unsigned(4 downto 0);
+    signal cnt_burst_s : unsigned(4 downto 0);
     
 begin
     -- These asserts are used by simulation in order to check the generic 
@@ -74,8 +76,8 @@ begin
                 if(start_i = '1')then
                     mem_o.wr          <= '1';
                     mem_o.burst       <= '1';
-                    cnt_burst <= to_unsigned(16, cnt_burst'length);
-                    mem_o.burst_range <= std_logic_vector(cnt_burst);
+                    cnt_burst_s <= to_unsigned(0, cnt_burst_s'length);
+                    mem_o.burst_range <= std_logic_vector(cnt_burst_s);
                     done_o <= '0';
                     next_state_s <= WAIT_BUSY;
                 else
@@ -92,8 +94,8 @@ begin
             when SEND_DATA =>
                 mem_o.data <= data_i;
                 data_ok_o <= '1';
-                cnt_burst <= cnt_burst-1;
-                if cnt_burst = 0 then
+                cnt_burst_s <= cnt_burst_s+1;
+                if cnt_burst_s = LINE_SIZE then
                     mem_o.wr     <= '0';
                     mem_o.burst  <= '0';
                     done_o       <= '1';
@@ -107,6 +109,7 @@ begin
             
       end if;
       state_s <= next_state_s;
+      cnt_burst_o <= std_logic_vector(cnt_burst_s);
     end process;
 
 end struct;
