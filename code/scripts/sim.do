@@ -13,9 +13,9 @@ proc vhdl_compil { } {
   
   vcom -2008 -work work $Path_VHDL/cmf_pkg.vhd
   vcom -2008 -work work $Path_VHDL/log_pkg.vhd
-  vcom -2008 -work work $Path_VHDL/cache_memory.vhd
   vcom -2008 -work work $Path_VHDL/mem_ctrl_read_mss.vhd
   vcom -2008 -work work $Path_VHDL/mem_ctrl_write_mss.vhd
+  vcom -2008 -work work $Path_VHDL/cache_memory.vhd
   
   vcom -2008 $Path_VHDL_TB/cache_memory_tb.vhd
 }
