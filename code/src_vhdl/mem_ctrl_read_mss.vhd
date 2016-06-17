@@ -37,6 +37,9 @@ entity mem_ctrl_read_mss is
     port (
         clk_i             : in  std_logic;
         reset_i           : in  std_logic;
+        start_i           : in  std_logic;
+        data_o            : out std_logic_vector(DATA_SIZE -1 downto 0);
+        data_ok_o         : out std_logic;
         --agent interface------------------ 
         agent_i           : in  agent_to_cache_t;
         agent_o           : out cache_to_agent_t;
@@ -58,6 +61,7 @@ architecture struct of mem_ctrl_read_mss is
     
     -- FSM
     signal state_s, next_state_s : STATE_TYPE;
+    signal cnt_busrt : unsigned;
     
 begin
     -- These asserts are used by simulation in order to check the generic 
@@ -71,9 +75,11 @@ begin
       elsif rising_edge(clk_i) then
         case state_s is
             when state_s = WAIT_START =>
+                data_ok_o <= '0';
                 if(start_i = '1')then
                     mem_o.rd          <= '1';
                     mem_o.burst       <= '1';
+                    cnt_busrt <= 16;
                     mem_o.burst_range <= std_logic_vector(16);
                     done <= '0';
                     next_state_s <= WAIT_BUSY;
@@ -89,8 +95,23 @@ begin
                 end if;
                 
            when state_s = WAIT_READY =>
+                data_ok_o <= '0';
                 if(mem_i.dready = '1') then
-                    
+                    next_state_s <= STOCK_DATA;
+                else
+                    next_state_s <= WAIT_READY;
+                end if;
+                
+            when state_s = STOCK_DATA =>
+                data_o <= mem_i.data;
+                data_ok_o <= '1';
+                cnt_busrt<=cnt_busrt-1;
+                if cnt_busrt = 0 then
+                    next_state_s <= WAIT_START;
+                else
+                    next_state_s <= WAIT_READY;
+                end if;
+                
         end case;
             
             
