@@ -131,7 +131,9 @@ architecture struct of cache_memory is
         CHECK_DIRTY, 
         WRITE_MEMORY, 
         WRITE_CACHE_WORD, 
-        READ_BEFORE_WRITE);
+        READ_BEFORE_WRITE,
+        READ_BURST,
+        WRITE_BURST);
     
     signal cache : cache_type;            -- La cache (lignes de mots)
     signal dirty_bits : bit_array_type;   -- Les bits dirty de la cache
@@ -262,7 +264,6 @@ begin
             
           when READ_MEMORY =>
             -- Chercher la ligne entière en mémoire et la mettre dans le cache
-            start_r_s  <= '1';
             
             
             valid_bits(index_v) <= '1'; -- Mise à jour du valid
@@ -295,8 +296,29 @@ begin
             fsm_busy_out_s <= '0';
             next_state_s <= WAIT_FOR_DEMAND;
             
+         when READ_BURST =>
+            if(done_o = '1') then
+                start_r_s = '0';
+                next_state_s <= GIVE_DATA;
+            else
+                if(data_ok_o = '1') then
+                    cache(index_v)((cnt_burst_r_s+1) * DATA_SIZE - 1 downto block_off_v * DATA_SIZE) <= data_r_s;
+                end if;
+                next_state_s <= READ_BURST;
+            end if;
         end case;
             
+        when WRITE_BURST =>
+            if(done_o = '1') then
+                start_w_s = '0';
+                next_state_s <= WRITE_CACHE_WORD;
+            else
+                if(data_ok_o = '1') then
+                     data_w_s <= cache(index_v)((cnt_burst_r_s+1) * DATA_SIZE - 1 downto block_off_v * DATA_SIZE);
+                end if;
+                next_state_s <= WRITE_BURST;
+            end if;
+        end case;
             
       end if;
       state_s <= next_state_s;

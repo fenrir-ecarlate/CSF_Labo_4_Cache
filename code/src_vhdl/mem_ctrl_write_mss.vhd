@@ -89,10 +89,10 @@ begin
                     next_state_s <= WAIT_BUSY;
                 else
                     next_state_s <= SEND_DATA;
+                    mem_o.data <= data_i;
                 end if;
 
             when SEND_DATA =>
-                mem_o.data <= data_i;
                 data_ok_o <= '1';
                 cnt_burst_s <= cnt_burst_s+1;
                 if cnt_burst_s = LINE_SIZE then
