@@ -25,6 +25,7 @@ USE ieee.numeric_std.ALL;
 use IEEE.math_real.all;
 --library work;
 use work.cmf_pkg.all;
+use work.log_pkg.all;
 
 
 entity cache_memory is
@@ -57,6 +58,54 @@ end cache_memory;
 
 
 architecture struct of cache_memory is
+    -- Component
+    Component mem_ctrl_read_mss
+    generic(
+        ADDR_SIZE         : integer := 11;
+        DATA_SIZE         : integer := 8;
+        LINE_SIZE         : integer := 16);
+
+
+    port (
+        clk_i             : in  std_logic;
+        reset_i           : in  std_logic;
+        start_i           : in  std_logic;
+        cnt_burst_o       : out std_logic_vector(ilogup(LINE_SIZE)-1 downto 0); 
+        data_o            : out std_logic_vector(DATA_SIZE -1 downto 0);
+        data_ok_o         : out std_logic;
+        done_o            : out std_logic;
+        
+        --memory interface------------------ 
+        mem_i             : in  mem_to_cache_t;
+        mem_o             : out cache_to_mem_t 
+        --memory interface------------------
+     );
+     end component;
+     
+     Component mem_ctrl_write_mss is
+
+     generic(
+        ADDR_SIZE         : integer := 11;
+        DATA_SIZE         : integer := 8);
+
+     port (
+        clk_i             : in  std_logic;
+        reset_i           : in  std_logic;
+        start_i           : in  std_logic;
+        data_i            : in  std_logic_vector(DATA_SIZE -1 downto 0);
+        data_ok_o         : out std_logic;
+        done_o            : out std_logic;
+        
+        --memory interface------------------ 
+        mem_i             : in  mem_to_cache_t;
+        mem_o             : out cache_to_mem_t    
+    );  
+    end component;
+    
+    for all : mem_ctrl_read_mss use entity work.mem_ctrl_read_mss(struct);
+    for all : mem_ctrl_write_mss use entity work.mem_ctrl_write_mss(struct);
+
+    -- constant
     constant NUMBER_OF_WORDS_IN_CACHE_LINE : integer := 16; -- Nombre de mots par ligne de cache
     constant OFFSET_SIZE : integer := 4; -- LOG2(NUMBER_OF_WORDS_IN_CACHE_LINE)
     constant TAG_HIGH : integer := ADDR_SIZE - 1;
@@ -70,7 +119,17 @@ architecture struct of cache_memory is
     type bit_array_type is array (0 to (2**INDEX_SIZE)-1) of std_logic;
     type tag_type   is array (0 to (2**INDEX_SIZE)-1) of std_logic_vector(TAG_SIZE-1 downto 0);
 
-    type STATE_TYPE is (RESET, INIT, WAIT_FOR_DEMAND, READ_CACHE, READ_MEMORY, GIVE_DATA, CHECK_DIRTY, WRITE_MEMORY, WRITE_CACHE_WORD, READ_BEFORE_WRITE);
+    type STATE_TYPE is (
+        RESET, 
+        INIT, 
+        WAIT_FOR_DEMAND, 
+        READ_CACHE, 
+        READ_MEMORY, 
+        GIVE_DATA, 
+        CHECK_DIRTY, 
+        WRITE_MEMORY, 
+        WRITE_CACHE_WORD, 
+        READ_BEFORE_WRITE);
     
     signal cache : cache_type;            -- La cache (lignes de mots)
     signal dirty_bits : bit_array_type;   -- Les bits dirty de la cache
@@ -80,6 +139,8 @@ architecture struct of cache_memory is
     -- FSM
     signal state_s, next_state_s : STATE_TYPE;
     signal fsm_dready_out_s, fsm_busy_out_s, fsm_read_s, fsm_write_s : std_logic;
+    
+    signal fsm_data_out_s,fsm_word_in_s : std_logic_vector(DATA_SIZE - 1 downto 0); 
     
     -- Signaux d'entrée de la cache
     signal cache_index_s : std_logic_vector(INDEX_SIZE-1 downto 0);
@@ -91,7 +152,41 @@ architecture struct of cache_memory is
     -- Signaux de sortie de la cache
     signal cache_data_s : std_logic_vector(DATA_SIZE-1 downto 0);
     signal cache_hit_s : std_logic;
+    
+    -- Signal control
+    signal start_r_s, start_w_s : std_logic;
+    signal data_r_s, data_w_s : std_logic_vector(DATA_SIZE-1 downto 0);
+    signal data_ok_r_s, data_ok_w_s : std_logic;
+    signal done_r_s, done_w_s : std_logic;
+    signal cnt_burst_r_s, cnt_burst_w_s : std_logic_vector(ilogup(NUMBER_OF_WORDS_IN_CACHE_LINE)-1 downto 0);
 begin
+
+    Ctrl_read: mem_ctrl_read_mss
+        generic map(ADDR_SIZE => ADDR_SIZE, DATA_SIZE => DATA_SIZE, LINE_SIZE => NUMBER_OF_WORDS_IN_CACHE_LINE)
+        port map(
+            clk_i    => clk_i,
+            reset_i  => reset_i,
+            start_i  => start_r_s,
+            data_o   => data_r_s,
+            data_ok_o=> data_ok_r_s,
+            done_o   => done_r_s,
+            mem_i    => mem_i,
+            mem_o    => mem_o
+       );
+       
+    Ctrl_write: mem_ctrl_write_mss
+        generic map(ADDR_SIZE => ADDR_SIZE, DATA_SIZE => DATA_SIZE)
+        port map(
+            clk_i    => clk_i,
+            reset_i  => reset_i,
+            start_i  => start_w_s,
+            data_i   => data_w_s,
+            data_ok_o=> data_ok_w_s,
+            done_o   => done_w_s,
+            mem_i    => mem_i,
+            mem_o    => mem_o
+       );
+
     -- These asserts are used by simulation in order to check the generic 
     -- parameters with the instanciation of record ports
     assert agent_i.addr'length = ADDR_SIZE report "Address size do not match" severity failure;
@@ -116,14 +211,15 @@ begin
     cache_b_off_s <= agent_i.addr(BLOCK_HIGH downto BLOCK_LOW);
     
     cache_fsm_process : process (clk_i, reset_i) is
+    variable index_v : integer;
+    variable block_off_v : integer;
     begin
       if (reset_i = '1') then
         state_s <= RESET;
         next_state_s <= RESET;
       elsif rising_edge(clk_i) then
-        variable index_v : integer := to_integer(unsigned(cache_index_s));
-        variable block_off_v : integer := to_integer(unsigned(cache_b_off_s));
-        
+        index_v := to_integer(unsigned(cache_index_s));
+        block_off_v := to_integer(unsigned(cache_b_off_s));
         case state_s is
           
           when RESET => -- Etat de départ
@@ -162,6 +258,9 @@ begin
             
           when READ_MEMORY =>
             -- Chercher la ligne entière en mémoire et la mettre dans le cache
+            start_r_s  <= '1';
+            
+            
             valid_bits(index_v) <= '1'; -- Mise à jour du valid
             tags(index_v) <= cache_tag_s; -- Mise à jour du tag
             next_state_s <= GIVE_DATA;
@@ -175,6 +274,9 @@ begin
             
           when WRITE_MEMORY =>
             -- Ecrire la ligne en mémoire
+            
+            
+            
             next_state_s <= READ_BEFORE_WRITE;
             
           when READ_BEFORE_WRITE =>
@@ -184,7 +286,7 @@ begin
             next_state_s <= WRITE_CACHE_WORD;
             
           when WRITE_CACHE_WORD =>
-            cache(index_v)(block_off_v+1) * DATA_SIZE - 1 downto block_off_v * DATA_SIZE) <= fsm_word_in_s;
+            cache(index_v)((block_off_v+1) * DATA_SIZE - 1 downto block_off_v * DATA_SIZE) <= fsm_word_in_s;
             dirty_bits(index_v) <= '1'; -- Ecriture en cache donc dirty
             fsm_busy_out_s <= '0';
             next_state_s <= WAIT_FOR_DEMAND;

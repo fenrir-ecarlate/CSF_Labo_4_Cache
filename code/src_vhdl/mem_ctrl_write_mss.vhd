@@ -2,7 +2,7 @@
 -- HEIG-VD, Haute Ecole d'Ingenierie et de Gestion du canton de Vaud
 -- Institut REDS, Reconfigurable & Embedded Digital Systems
 --
--- Fichier      : mem_ctrl_read_mss.vhd
+-- Fichier      : mem_ctrl_write_mss.vhd
 --
 -- Description  : Contrôleur entre la mémoire et la cache
 -- 
@@ -25,45 +25,42 @@ USE ieee.numeric_std.ALL;
 use IEEE.math_real.all;
 --library work;
 use work.cmf_pkg.all;
-use work.log_pkg.all;
 
 
-entity mem_ctrl_read_mss is
+entity mem_ctrl_write_mss is
 
     generic(
         ADDR_SIZE         : integer := 11;
-        DATA_SIZE         : integer := 8;
-        LINE_SIZE         : integer := 16);
-
+        DATA_SIZE         : integer := 8);
 
     port (
         clk_i             : in  std_logic;
         reset_i           : in  std_logic;
         start_i           : in  std_logic;
-        cnt_burst_o       : out std_logic_vector(ilogup(LINE_SIZE)-1 downto 0); 
-        data_o            : out std_logic_vector(DATA_SIZE -1 downto 0);
+        data_i            : in  std_logic_vector(DATA_SIZE -1 downto 0);
         data_ok_o         : out std_logic;
         done_o            : out std_logic;
         
         --memory interface------------------ 
         mem_i             : in  mem_to_cache_t;
-        mem_o             : out cache_to_mem_t 
-        --memory interface------------------
+        mem_o             : out cache_to_mem_t    
         );  
 
 
-end mem_ctrl_read_mss;
+end mem_ctrl_write_mss;
 
 
-architecture struct of mem_ctrl_read_mss is
+architecture struct of mem_ctrl_write_mss is
 
-    type STATE_TYPE is (WAIT_START, WAIT_BUSY, WAIT_READY, STOCK_DATA);
+    type STATE_TYPE is (WAIT_START, WAIT_BUSY, SEND_DATA);
     
     -- FSM
     signal state_s, next_state_s : STATE_TYPE;
-    signal cnt_burst_s : unsigned(ilogup(LINE_SIZE)-1 downto 0);
+    signal cnt_burst : unsigned(4 downto 0);
     
 begin
+    -- These asserts are used by simulation in order to check the generic 
+    -- parameters with the instanciation of record ports
 
     cache_fsm_process : process (clk_i, reset_i) is
     begin
@@ -75,10 +72,10 @@ begin
             when WAIT_START =>
                 data_ok_o <= '0';
                 if(start_i = '1')then
-                    mem_o.rd          <= '1';
+                    mem_o.wr          <= '1';
                     mem_o.burst       <= '1';
-                    cnt_burst_s <= to_unsigned(0, cnt_burst_s'length);
-                    mem_o.burst_range <= std_logic_vector(cnt_burst_s);
+                    cnt_burst <= to_unsigned(16, cnt_burst'length);
+                    mem_o.burst_range <= std_logic_vector(cnt_burst);
                     done_o <= '0';
                     next_state_s <= WAIT_BUSY;
                 else
@@ -89,35 +86,27 @@ begin
                 if(mem_i.busy='1') then
                     next_state_s <= WAIT_BUSY;
                 else
-                    next_state_s <= WAIT_READY;
+                    next_state_s <= SEND_DATA;
                 end if;
-                
-           when WAIT_READY =>
-                data_ok_o <= '0';
-                if(mem_i.dready = '1') then
-                    next_state_s <= STOCK_DATA;
-                else
-                    next_state_s <= WAIT_READY;
-                end if;
-                
-            when STOCK_DATA =>
-                data_o <= mem_i.data;
+
+            when SEND_DATA =>
+                mem_o.data <= data_i;
                 data_ok_o <= '1';
-                cnt_burst_s<=cnt_burst_s+1;
-                if cnt_burst_s = LINE_SIZE then
-                    mem_o.rd          <= '0';
-                    mem_o.burst       <= '0';
-                    done_o <= '1';
+                cnt_burst <= cnt_burst-1;
+                if cnt_burst = 0 then
+                    mem_o.wr     <= '0';
+                    mem_o.burst  <= '0';
+                    done_o       <= '1';
                     next_state_s <= WAIT_START;
                 else
-                    next_state_s <= WAIT_READY;
+                    next_state_s <= WAIT_BUSY;
                 end if;
                 
         end case;
             
+            
       end if;
       state_s <= next_state_s;
-      cnt_burst_o <= std_logic_vector(cnt_burst_s);
     end process;
 
 end struct;
