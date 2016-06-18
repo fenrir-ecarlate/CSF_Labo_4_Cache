@@ -263,25 +263,20 @@ begin
             next_state_s <= WAIT_FOR_DEMAND;
             
           when READ_MEMORY =>
-            -- Chercher la ligne entière en mémoire et la mettre dans le cache
-            
-            
+            -- Chercher la ligne entière en mémoire et la mettre dans le cache        
             valid_bits(index_v) <= '1'; -- Mise à jour du valid
             tags(index_v) <= cache_tag_s; -- Mise à jour du tag
-            next_state_s <= GIVE_DATA;
+            next_state_s <= READ_BURST;
             
           when CHECK_DIRTY => -- Si dirty on doit stocker en mémoire
             if (dirty_bits(index_v) = '1' and valid_bits(index_v) = '1') then
-              next_state_s <= WRITE_MEMORY;
+              next_state_s <= WRITE_BURST;
             else
               next_state_s <= READ_BEFORE_WRITE;
             end if;
             
           when WRITE_MEMORY =>
             -- Ecrire la ligne en mémoire
-            
-            
-            
             next_state_s <= READ_BEFORE_WRITE;
             
           when READ_BEFORE_WRITE =>
@@ -297,24 +292,23 @@ begin
             next_state_s <= WAIT_FOR_DEMAND;
             
          when READ_BURST =>
-            if(done_o = '1') then
-                start_r_s = '0';
+            if(done_r_s = '1') then
+                start_r_s <= '0';
                 next_state_s <= GIVE_DATA;
             else
-                if(data_ok_o = '1') then
-                    cache(index_v)((cnt_burst_r_s+1) * DATA_SIZE - 1 downto block_off_v * DATA_SIZE) <= data_r_s;
+                if(data_ok_r_s = '1') then
+                    cache(index_v)((to_integer(unsigned(cnt_burst_r_s))+1) * DATA_SIZE - 1 downto block_off_v * DATA_SIZE) <= data_r_s;
                 end if;
                 next_state_s <= READ_BURST;
             end if;
-        end case;
             
         when WRITE_BURST =>
-            if(done_o = '1') then
-                start_w_s = '0';
-                next_state_s <= WRITE_CACHE_WORD;
+            if(done_w_s = '1') then
+                start_w_s <= '0';
+                next_state_s <= READ_BEFORE_WRITE;
             else
-                if(data_ok_o = '1') then
-                     data_w_s <= cache(index_v)((cnt_burst_r_s+1) * DATA_SIZE - 1 downto block_off_v * DATA_SIZE);
+                if(data_ok_w_s = '1') then
+                     data_w_s <= cache(index_v)((to_integer(unsigned(cnt_burst_w_s))+1)  * DATA_SIZE - 1 downto block_off_v * DATA_SIZE);
                 end if;
                 next_state_s <= WRITE_BURST;
             end if;
