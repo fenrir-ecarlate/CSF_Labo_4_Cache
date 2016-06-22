@@ -29,7 +29,7 @@ use work.cmf_pkg.all;
 
 entity cache_memory_tb is
 generic(
-    ADDR_SIZE         : integer :=11;
+    ADDR_SIZE         : integer :=12;
     INDEX_SIZE        : integer :=5;   --Memory depth = 2^INDEX_SIZE                
     TAG_SIZE          : integer :=6;   --TAG_SIZE must have the same size than the DDR3 memory @ddress - INDEX
     DATA_SIZE         : integer :=8    --Data field must have the same size than the DDR3 memory data  
@@ -42,7 +42,7 @@ architecture testbench of cache_memory_tb is
 
     component cache_memory is
     generic(
-        ADDR_SIZE         : integer := 11;
+        ADDR_SIZE         : integer :=11;
         INDEX_SIZE        : integer :=5; --Memory depth = 2^INDEX_SIZE                
         TAG_SIZE          : integer :=6; --TAG_SIZE must have the same size than the DDR3 memory @ddress - INDEX
         DATA_SIZE         : integer :=8  --Data field must have the same size than the DDR3 memory data  
@@ -50,7 +50,7 @@ architecture testbench of cache_memory_tb is
     
     port (
         clk_i             : in  std_logic;
-        reset             : in  std_logic;
+        reset_i           : in  std_logic;
         --CPU interface------------------ 
         agent_i           : in  agent_to_cache_t;
         agent_o           : out cache_to_agent_t;
@@ -84,7 +84,7 @@ architecture testbench of cache_memory_tb is
     signal clk_sti : std_logic;
     signal reset_sti : std_logic;
     
-    signal from_agent_sti       : agent_to_cache_t(addr(ADDR_SIZE-1 downto 0),
+    signal from_agent_sti     : agent_to_cache_t(addr(ADDR_SIZE-1 downto 0),
                                                  data(DATA_SIZE-1 downto 0));
     signal cache_to_agent_obs : cache_to_agent_t(data(DATA_SIZE-1 downto 0));
     signal from_mem_obs       : mem_to_cache_t(data(DATA_SIZE-1 downto 0));
@@ -98,7 +98,7 @@ architecture testbench of cache_memory_tb is
     signal synchro_verif  : std_logic;
     signal verification_going : std_logic;
 
-    constant CLK_PERIOD : time := 1 ns;
+    constant CLK_PERIOD : time := 2 ns;
 begin
         
     dut : cache_memory
@@ -110,7 +110,7 @@ begin
             )
     port map(
         clk_i => clk_sti,
-        reset => reset_sti,
+        reset_i => reset_sti,
         --Agent interface-----
         agent_i => from_agent_sti,
         agent_o => cache_to_agent_obs, 
@@ -140,12 +140,61 @@ begin
       mem_i   => cache_to_mem_obs
     );
 
+    reset_process : process
+    begin
+      reset_sti <= '1';
+      wait for 5*CLK_PERIOD;
+      reset_sti <= '0';
+      wait;
+    end process;
+    
     clk_process : process
     begin
       clk_sti <= '0';
       wait for CLK_PERIOD / 2;
       clk_sti <= '1';
       wait for CLK_PERIOD / 2;
+    end process;
+    
+    sti_process : process
+    variable data : std_logic_vector(DATA_SIZE-1 downto 0);
+    begin
+      from_agent_sti.data <= (others => '0');
+      from_agent_sti.addr <= (others => '0');
+      from_agent_sti.rd <= '0';
+      from_agent_sti.wr <= '0';
+      
+      wait until falling_edge(reset_sti);
+      wait for 10 ns;
+      wait until falling_edge(clk_sti);
+      
+      -- Ecriture
+      report "Ecriture !";
+
+      data := "10100101";
+      from_agent_sti.data <= data;
+      from_agent_sti.addr <= "000000000101";
+      from_agent_sti.wr <= '1';
+      wait until rising_edge(cache_to_agent_obs.busy);
+      from_agent_sti.wr <= '0';
+      wait until falling_edge(cache_to_agent_obs.busy);
+      report "Ecriture dans cache finie";
+      
+      -- Lecture
+      wait for 10 ns;
+      wait until falling_edge(clk_sti);
+      from_agent_sti.rd <= '1';
+      wait until rising_edge(cache_to_agent_obs.busy);
+      from_agent_sti.rd <= '0';
+      wait until falling_edge(cache_to_agent_obs.busy);
+      if (cache_to_agent_obs.data = data) then
+        report "C'est bon !";
+      else
+        report "Votre système est bô mal !";
+      end if;
+      
+      wait;
+      
     end process;
     
     -- Processus de commande et synchronisation

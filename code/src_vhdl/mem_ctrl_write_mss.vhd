@@ -58,7 +58,7 @@ architecture struct of mem_ctrl_write_mss is
     
     -- FSM
     signal state_s, next_state_s : STATE_TYPE;
-    signal cnt_burst_s : unsigned(4 downto 0);
+    signal cnt_burst_s : unsigned(ilogup(LINE_SIZE)-1 downto 0);
     
 begin
     -- These asserts are used by simulation in order to check the generic 
@@ -74,11 +74,11 @@ begin
             when WAIT_START =>
                 data_ok_o <= '0';
                 if(start_i = '1')then
-                    mem_o.wr          <= '1';
-                    mem_o.burst       <= '1';
+                    --mem_o.wr          <= '1';
+                    --mem_o.burst       <= '1';
                     cnt_burst_s <= to_unsigned(0, cnt_burst_s'length);
-                    mem_o.burst_range <= std_logic_vector(cnt_burst_s);
-                    done_o <= '0';
+                    --mem_o.burst_range <= std_logic_vector(cnt_burst_s);
+                    --done_o <= '0';
                     next_state_s <= WAIT_BUSY;
                 else
                     next_state_s <= WAIT_START;
@@ -89,7 +89,7 @@ begin
                     next_state_s <= WAIT_BUSY;
                 else
                     next_state_s <= SEND_DATA;
-                    mem_o.data <= data_i;
+                    --mem_o.data <= data_i;
                 end if;
 
             when SEND_DATA =>

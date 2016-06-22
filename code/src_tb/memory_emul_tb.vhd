@@ -45,7 +45,7 @@ end memory_emul_tb;
 
 architecture testbench of memory_emul_tb is
   -- Constants
-  constant READ_LATENCY_CLKS : integer := 10;
+  constant READ_LATENCY_CLKS : integer := 20;
   
   -- Signals
   -- On ne va simuler qu'une partie de la mémoire (adresses de 0xFF à 0x0)
@@ -60,10 +60,20 @@ begin
       mem_o.dready <= '0';
         if (mem_i.wr = '1') then
           if (mem_i.burst = '0') then -- Ecriture simple
+            mem_o.busy <= '1';
+            for i in 0 to READ_LATENCY_CLKS loop -- Simulation de latence
+              wait until rising_edge(clk_i);
+            end loop;
             memory(to_integer(unsigned(mem_i.addr(7 downto 0)))) <= mem_i.data;
+            mem_o.busy <= '0';
           else -- Ecriture en burst (un data par coup de clk avec adresse croissante)
             for i in 0 to to_integer(unsigned(mem_i.burst_range)) loop
+              mem_o.busy <= '1';
+              for i in 0 to READ_LATENCY_CLKS loop -- Simulation de latence
+                wait until rising_edge(clk_i);
+              end loop;
               memory(to_integer(unsigned(mem_i.addr(7 downto 0)))+i) <= mem_i.data;
+              mem_o.busy <= '0';
               wait until rising_edge(clk_i);
             end loop;
           end if;
@@ -80,16 +90,17 @@ begin
           else -- Lecture en burst (un data par coup de clk avec adresse croissante)
             for i in 0 to to_integer(unsigned(mem_i.burst_range)) loop
               mem_o.dready <= '0';
+              mem_o.busy <= '1';
               for i in 0 to READ_LATENCY_CLKS loop -- Simulation de latence
                 wait until rising_edge(clk_i);
               end loop;
-              mem_o.data <= memory(to_integer(unsigned(mem_i.addr(7 downto 0))));
+              mem_o.busy <= '0';
+              mem_o.data <= memory(to_integer(unsigned(mem_i.addr(7 downto 0)))+i);
               mem_o.dready <= '1';
               wait until rising_edge(clk_i);
             end loop;
           end if;
         end if;
-      end if;
   end process;
 end testbench;
 

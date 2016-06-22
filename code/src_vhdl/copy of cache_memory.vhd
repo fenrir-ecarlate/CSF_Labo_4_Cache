@@ -58,6 +58,55 @@ end cache_memory;
 
 
 architecture struct of cache_memory is
+    -- Component
+    Component mem_ctrl_read_mss
+    generic(
+        ADDR_SIZE         : integer := 11;
+        DATA_SIZE         : integer := 8;
+        LINE_SIZE         : integer := 16);
+
+
+    port (
+        clk_i             : in  std_logic;
+        reset_i           : in  std_logic;
+        start_i           : in  std_logic;
+        cnt_burst_o       : out std_logic_vector(ilogup(LINE_SIZE)-1 downto 0); 
+        data_o            : out std_logic_vector(DATA_SIZE -1 downto 0);
+        data_ok_o         : out std_logic;
+        done_o            : out std_logic;
+        
+        --memory interface------------------ 
+        mem_i             : in  mem_to_cache_t;
+        mem_o             : out cache_to_mem_t 
+        --memory interface------------------
+     );
+     end component;
+     
+     Component mem_ctrl_write_mss is
+
+     generic(
+        ADDR_SIZE         : integer := 11;
+        DATA_SIZE         : integer := 8;
+        LINE_SIZE         : integer := 16);
+
+     port (
+        clk_i             : in  std_logic;
+        reset_i           : in  std_logic;
+        start_i           : in  std_logic;
+        cnt_burst_o       : out std_logic_vector(ilogup(LINE_SIZE)-1 downto 0); 
+        data_i            : in  std_logic_vector(DATA_SIZE -1 downto 0);
+        data_ok_o         : out std_logic;
+        done_o            : out std_logic;
+        
+        --memory interface------------------ 
+        mem_i             : in  mem_to_cache_t;
+        mem_o             : out cache_to_mem_t    
+    );  
+    end component;
+    
+    for all : mem_ctrl_read_mss use entity work.mem_ctrl_read_mss(struct);
+    for all : mem_ctrl_write_mss use entity work.mem_ctrl_write_mss(struct);
+
     -- constant
     constant NUMBER_OF_WORDS_IN_CACHE_LINE : integer := 2**(ADDR_SIZE-(TAG_SIZE+INDEX_SIZE)); -- Nombre de mots par ligne de cache
     constant OFFSET_SIZE : integer := (ADDR_SIZE-(TAG_SIZE+INDEX_SIZE));
@@ -77,15 +126,14 @@ architecture struct of cache_memory is
         INIT, 
         WAIT_FOR_DEMAND, 
         READ_CACHE, 
-        READ_BURST_1,
-        READ_BURST_2,
+        READ_MEMORY, 
         GIVE_DATA, 
         CHECK_DIRTY, 
-        WRITE_BURST_1,
-        HIT_AND_VALID, 
-        READ_BEFORE_WRITE_1,
-        READ_BEFORE_WRITE_2,
-        WRITE_CACHE_WORD);
+        WRITE_MEMORY, 
+        WRITE_CACHE_WORD, 
+        READ_BEFORE_WRITE,
+        READ_BURST,
+        WRITE_BURST);
     
     signal cache : cache_type;            -- La cache (lignes de mots)
     signal dirty_bits : bit_array_type;   -- Les bits dirty de la cache
@@ -96,8 +144,7 @@ architecture struct of cache_memory is
     signal state_s, next_state_s : STATE_TYPE;
     signal fsm_dready_out_s, fsm_busy_out_s, fsm_read_s, fsm_write_s : std_logic;
     
-    signal fsm_data_out_s,fsm_word_in_s : std_logic_vector(DATA_SIZE - 1 downto 0);
-    signal fsm_addr_in_s : std_logic_vector(ADDR_SIZE - 1 downto 0);
+    signal fsm_data_out_s,fsm_word_in_s : std_logic_vector(DATA_SIZE - 1 downto 0); 
     
     -- Signaux d'entrée de la cache
     signal cache_index_s : std_logic_vector(INDEX_SIZE-1 downto 0);
@@ -109,7 +156,6 @@ architecture struct of cache_memory is
     -- Signaux de sortie de la cache
     signal cache_data_s : std_logic_vector(DATA_SIZE-1 downto 0);
     signal cache_hit_s : std_logic;
-    signal burst_counter_s : unsigned(OFFSET_SIZE downto 0);
     
     -- Signal control
     signal start_r_s, start_w_s : std_logic;
@@ -119,6 +165,35 @@ architecture struct of cache_memory is
     signal cnt_burst_r_s, cnt_burst_w_s : std_logic_vector(ilogup(NUMBER_OF_WORDS_IN_CACHE_LINE)-1 downto 0);
 begin
     assert (ADDR_SIZE-(TAG_SIZE+OFFSET_SIZE)) > 0 report "Address Malformation" severity failure;
+
+    Ctrl_read: mem_ctrl_read_mss
+        generic map(ADDR_SIZE => ADDR_SIZE, DATA_SIZE => DATA_SIZE, LINE_SIZE => NUMBER_OF_WORDS_IN_CACHE_LINE)
+        port map(
+            clk_i    => clk_i,
+            reset_i  => reset_i,
+            start_i  => start_r_s,
+            cnt_burst_o => cnt_burst_r_s,
+            data_o   => data_r_s,
+            data_ok_o=> data_ok_r_s,
+            done_o   => done_r_s,
+            mem_i    => mem_i,
+            mem_o    => mem_o
+       );
+       
+    Ctrl_write: mem_ctrl_write_mss
+        generic map(ADDR_SIZE => ADDR_SIZE, DATA_SIZE => DATA_SIZE, LINE_SIZE => NUMBER_OF_WORDS_IN_CACHE_LINE)
+        port map(
+            clk_i    => clk_i,
+            reset_i  => reset_i,
+            start_i  => start_w_s,
+            cnt_burst_o => cnt_burst_w_s,
+            data_i   => data_w_s,
+            data_ok_o=> data_ok_w_s,
+            done_o   => done_w_s,
+            mem_i    => mem_i,
+            mem_o    => mem_o
+       );
+
     -- These asserts are used by simulation in order to check the generic 
     -- parameters with the instanciation of record ports
     assert agent_i.addr'length = ADDR_SIZE report "Address size do not match" severity failure;
@@ -135,11 +210,12 @@ begin
     
     fsm_write_s <= agent_i.wr;
     fsm_read_s <= agent_i.rd;
+    fsm_word_in_s <= agent_i.data;
 
     -- Décomposition de l'adresse :
-    cache_tag_s <= fsm_addr_in_s(TAG_HIGH downto TAG_LOW);
-    cache_index_s <= fsm_addr_in_s(INDEX_HIGH downto INDEX_LOW);
-    cache_b_off_s <= fsm_addr_in_s(BLOCK_HIGH downto BLOCK_LOW);
+    cache_tag_s <= agent_i.addr(TAG_HIGH downto TAG_LOW);
+    cache_index_s <= agent_i.addr(INDEX_HIGH downto INDEX_LOW);
+    cache_b_off_s <= agent_i.addr(BLOCK_HIGH downto BLOCK_LOW);
     
     cache_fsm_process : process (clk_i, reset_i) is
     variable index_v : integer;
@@ -155,9 +231,6 @@ begin
           
           when RESET => -- Etat de départ
             next_state_s <= INIT;
-            fsm_addr_in_s <= (others => '0');
-            fsm_word_in_s <= (others => '0');
-            burst_counter_s <= (others => '0');
             
           when INIT => -- Initialisations
             valid_bits <= (others => '0'); -- Ceci suffit la cache n'a pas
@@ -165,133 +238,53 @@ begin
             dirty_bits <= (others => '0'); -- Tout est beau propre !
             fsm_dready_out_s <= '0';
             fsm_busy_out_s <= '0';
-            fsm_data_out_s <= (others => '0');
             next_state_s <= WAIT_FOR_DEMAND;
             
           when WAIT_FOR_DEMAND =>
-            burst_counter_s <= (others => '0');
-            if (fsm_read_s = '1') then -- read prioritaire au write (mais avoir les deux n'aurait pas de sens)
+            if (fsm_read_s = '1') then
               next_state_s <= READ_CACHE;
               fsm_dready_out_s <= '0';
-              fsm_busy_out_s <= '1';
-              fsm_addr_in_s <= agent_i.addr;
             elsif (fsm_write_s = '1') then
-              fsm_word_in_s <= agent_i.data;
-              fsm_addr_in_s <= agent_i.addr;
               next_state_s <= CHECK_DIRTY;
               fsm_busy_out_s <= '1';
             else
-              next_state_s <= WAIT_FOR_DEMAND; -- Etat d'attente
-              fsm_busy_out_s <= '0';
+              next_state_s <= WAIT_FOR_DEMAND;
             end if;
             
           when READ_CACHE =>
-            -- vérifie s'il y a hit
             if (tags(index_v) = cache_tag_s and valid_bits(index_v) = '1') then
               next_state_s <= GIVE_DATA;
             else
-              burst_counter_s <= (others => '0');
-              mem_o.wr <= '0';
-              mem_o.rd <= '1';
-              mem_o.burst <= '1';
-              mem_o.addr <= fsm_addr_in_s(ADDR_SIZE-1 downto OFFSET_SIZE) & std_logic_vector(to_unsigned(0, OFFSET_SIZE)); -- Adresse de la ligne de cache voulue
-              mem_o.burst_range <= std_logic_vector(to_unsigned(NUMBER_OF_WORDS_IN_CACHE_LINE, mem_o.burst_range'length));
-              next_state_s <= READ_BURST_1;
+              next_state_s <= READ_MEMORY;
             end if;
-          
-          when READ_BURST_1 =>
-            if (mem_i.busy = '1') then -- Attente sur la mémoire
-                next_state_s <= READ_BURST_1;
-            else
-                next_state_s <= READ_BURST_2;
-            end if;
-              
-          when READ_BURST_2 =>
-            if (burst_counter_s = NUMBER_OF_WORDS_IN_CACHE_LINE) then
-                mem_o.rd <= '0'; -- Fini de lire
-                next_state_s <= GIVE_DATA;
-            else
-                if (mem_i.dready = '1') then -- Attente sur la mémoire
-                    -- Mise à jour de la cache
-                    cache(index_v)((to_integer(burst_counter_s)+1) * DATA_SIZE - 1 downto to_integer(burst_counter_s) * DATA_SIZE) <= mem_i.data;
-                    burst_counter_s <= burst_counter_s + 1;
-                end if;
-                next_state_s <= READ_BURST_2;
-            end if;
-          
+            
           when GIVE_DATA =>
             fsm_data_out_s <= cache(index_v)((block_off_v+1) * DATA_SIZE - 1 downto block_off_v * DATA_SIZE);
             fsm_dready_out_s <= '1';
-            fsm_busy_out_s <= '0';
             next_state_s <= WAIT_FOR_DEMAND;
+            
+          when READ_MEMORY =>
+            -- Chercher la ligne entière en mémoire et la mettre dans le cache        
+            valid_bits(index_v) <= '1'; -- Mise à jour du valid
+            tags(index_v) <= cache_tag_s; -- Mise à jour du tag
+            next_state_s <= READ_BURST;
             
           when CHECK_DIRTY => -- Si dirty on doit stocker en mémoire
             if (dirty_bits(index_v) = '1' and valid_bits(index_v) = '1') then
-              if (mem_i.busy = '1') then -- Attente de la mémoire
-                next_state_s <= CHECK_DIRTY;
-              else  
-                mem_o.wr <= '1';
-                mem_o.rd <= '0';
-                mem_o.burst <= '1';
-                mem_o.addr <= tags(index_v) & cache_index_s & std_logic_vector(to_unsigned(0, OFFSET_SIZE)); -- Addresse de l'ancienne ligne de cache
-                mem_o.data <= cache(index_v)((to_integer(burst_counter_s)+1) * DATA_SIZE - 1 downto to_integer(burst_counter_s) * DATA_SIZE);
-                mem_o.burst_range <= std_logic_vector(to_unsigned(NUMBER_OF_WORDS_IN_CACHE_LINE, mem_o.burst_range'length));
-                burst_counter_s <= burst_counter_s + 1;
-                next_state_s <= WRITE_BURST_1;
-              end if;
+              next_state_s <= WRITE_BURST;
             else
-              next_state_s <= HIT_AND_VALID;
-            end if;
-          
-          when WRITE_BURST_1 =>
-            if (mem_i.busy = '1') then
-                next_state_s <= WRITE_BURST_1;
-            else
-                if (burst_counter_s = NUMBER_OF_WORDS_IN_CACHE_LINE) then
-                    mem_o.wr <= '0';
-                    next_state_s <= HIT_AND_VALID;
-                else
-                    mem_o.data <= cache(index_v)((to_integer(burst_counter_s)+1) * DATA_SIZE - 1 downto to_integer(burst_counter_s) * DATA_SIZE);
-                    burst_counter_s <= burst_counter_s + 1;
-                    next_state_s <= WRITE_BURST_1;
-                end if;
-            end if;
-          
-          when HIT_AND_VALID =>
-            if (tags(index_v) = cache_tag_s and valid_bits(index_v) = '1') then
-              next_state_s <= WRITE_CACHE_WORD;
-            else
-              burst_counter_s <= (others => '0');
-              mem_o.wr <= '0';
-              mem_o.rd <= '1';
-              mem_o.burst <= '1';
-              mem_o.addr <= fsm_addr_in_s(ADDR_SIZE-1 downto OFFSET_SIZE) & std_logic_vector(to_unsigned(0, OFFSET_SIZE)); -- Adresse de la ligne de cache voulue
-              mem_o.burst_range <= std_logic_vector(to_unsigned(NUMBER_OF_WORDS_IN_CACHE_LINE, mem_o.burst_range'length));
-              next_state_s <= READ_BEFORE_WRITE_1;
+              next_state_s <= READ_BEFORE_WRITE;
             end if;
             
-          when READ_BEFORE_WRITE_1 =>
-            if (mem_i.busy = '1') then -- Attente sur la mémoire
-                next_state_s <= READ_BEFORE_WRITE_1;
-            else
-                next_state_s <= READ_BEFORE_WRITE_2;
-            end if;
+          when WRITE_MEMORY =>
+            -- Ecrire la ligne en mémoire
+            next_state_s <= READ_BEFORE_WRITE;
             
-          when READ_BEFORE_WRITE_2 => 
-            if (burst_counter_s = NUMBER_OF_WORDS_IN_CACHE_LINE) then
-                mem_o.rd <= '0'; -- Fini de lire
-                valid_bits(index_v) <= '1'; -- Mise à jour du valid
-                tags(index_v) <= cache_tag_s; -- Mise à jour du tag
-                next_state_s <= WRITE_CACHE_WORD;
-            else
-                if (mem_i.dready = '1') then -- Attente sur la mémoire
-                    -- Mise à jour de la cache
-                    cache(index_v)((to_integer(burst_counter_s)+1) * DATA_SIZE - 1 downto to_integer(burst_counter_s) * DATA_SIZE) <= mem_i.data;
-                    burst_counter_s <= burst_counter_s + 1;
-                end if;
-                next_state_s <= READ_BEFORE_WRITE_2;
-            end if;
+          when READ_BEFORE_WRITE =>
             -- Récuperer la ligne de cache en mémoire avant d'écrire un mot dessus
+            valid_bits(index_v) <= '1'; -- Mise à jour du valid
+            tags(index_v) <= cache_tag_s; -- Mise à jour du tag
+            next_state_s <= WRITE_CACHE_WORD;
             
           when WRITE_CACHE_WORD =>
             cache(index_v)((block_off_v+1) * DATA_SIZE - 1 downto block_off_v * DATA_SIZE) <= fsm_word_in_s;
@@ -299,6 +292,27 @@ begin
             fsm_busy_out_s <= '0';
             next_state_s <= WAIT_FOR_DEMAND;
             
+         when READ_BURST =>
+            if(done_r_s = '1') then
+                start_r_s <= '0';
+                next_state_s <= GIVE_DATA;
+            else
+                if(data_ok_r_s = '1') then
+                    cache(index_v)((to_integer(unsigned(cnt_burst_r_s))+1) * DATA_SIZE - 1 downto block_off_v * DATA_SIZE) <= data_r_s;
+                end if;
+                next_state_s <= READ_BURST;
+            end if;
+            
+        when WRITE_BURST =>
+            if(done_w_s = '1') then
+                start_w_s <= '0';
+                next_state_s <= READ_BEFORE_WRITE;
+            else
+                if(data_ok_w_s = '1') then
+                     data_w_s <= cache(index_v)((to_integer(unsigned(cnt_burst_w_s))+1)  * DATA_SIZE - 1 downto block_off_v * DATA_SIZE);
+                end if;
+                next_state_s <= WRITE_BURST;
+            end if;
         end case;
             
       end if;
