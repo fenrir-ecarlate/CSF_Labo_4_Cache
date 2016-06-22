@@ -12,7 +12,6 @@ proc vhdl_compil { } {
   vlib work
   
   vcom -2008 -work work $Path_VHDL/cmf_pkg.vhd
-  vcom -2008 -work work $Path_VHDL/log_pkg.vhd
   vcom -2008 -work work $Path_VHDL/cache_memory.vhd
   
   vcom -2008 $Path_VHDL_TB/memory_emul_tb.vhd

@@ -68,33 +68,35 @@ architecture testbench of cache_memory_tb is
 
     component memory_emul_tb is
     generic(
-      ADDR_SIZE         : integer :=11;
-      INDEX_SIZE        : integer :=5;   --Memory depth = 2^INDEX_SIZE                
-      TAG_SIZE          : integer :=6;   --TAG_SIZE must have the same size than the DDR3 memory @ddress - INDEX
-      DATA_SIZE         : integer :=8    --Data field must have the same size than the DDR3 memory data
-      );
+        ADDR_SIZE         : integer :=11;
+        INDEX_SIZE        : integer :=5;   --Memory depth = 2^INDEX_SIZE                
+        TAG_SIZE          : integer :=6;   --TAG_SIZE must have the same size than the DDR3 memory @ddress - INDEX
+        DATA_SIZE         : integer :=8    --Data field must have the same size than the DDR3 memory data
+    );
     port(
-      clk_i               : in std_logic;
-      reset_i             : in std_logic;
+        clk_i               : in std_logic;
+        reset_i             : in std_logic;
 
-      mem_o               : out mem_to_cache_t;
-      mem_i               : in cache_to_mem_t);
+        mem_o               : out mem_to_cache_t;
+        mem_i               : in cache_to_mem_t);
     end component;
 
     signal clk_sti : std_logic;
     signal reset_sti : std_logic;
     
     signal from_agent_sti     : agent_to_cache_t(addr(ADDR_SIZE-1 downto 0),
-                                                 data(DATA_SIZE-1 downto 0));
+                                                data(DATA_SIZE-1 downto 0));
     signal cache_to_agent_obs : cache_to_agent_t(data(DATA_SIZE-1 downto 0));
     signal from_mem_obs       : mem_to_cache_t(data(DATA_SIZE-1 downto 0));
     signal cache_to_mem_obs   : cache_to_mem_t(burst_range(ADDR_SIZE-1 downto 0),
-                                               addr(ADDR_SIZE-1 downto 0),
-                                               data(DATA_SIZE-1 downto 0));
+                                            addr(ADDR_SIZE-1 downto 0),
+                                            data(DATA_SIZE-1 downto 0));
 
 
     signal monitor_obs    : cache_monitor_t;                                  
 
+    signal sim_end : boolean := false;
+    
     signal synchro_verif  : std_logic;
     signal verification_going : std_logic;
 
@@ -127,74 +129,116 @@ begin
 
     memory : memory_emul_tb
     generic map(
-      ADDR_SIZE  => ADDR_SIZE,
-      INDEX_SIZE => INDEX_SIZE,
-      TAG_SIZE   => TAG_SIZE,
-      DATA_SIZE  => DATA_SIZE
-      )
+        ADDR_SIZE  => ADDR_SIZE,
+        INDEX_SIZE => INDEX_SIZE,
+        TAG_SIZE   => TAG_SIZE,
+        DATA_SIZE  => DATA_SIZE
+    )
     port map(
-      clk_i   => clk_sti,
-      reset_i => reset_sti,
+        clk_i   => clk_sti,
+        reset_i => reset_sti,
 
-      mem_o   => from_mem_obs,
-      mem_i   => cache_to_mem_obs
+        mem_o   => from_mem_obs,
+        mem_i   => cache_to_mem_obs
     );
 
     reset_process : process
     begin
-      reset_sti <= '1';
-      wait for 5*CLK_PERIOD;
-      reset_sti <= '0';
-      wait;
+        reset_sti <= '1';
+        wait for 5*CLK_PERIOD;
+        reset_sti <= '0';
+        wait;
     end process;
     
     clk_process : process
     begin
-      clk_sti <= '0';
-      wait for CLK_PERIOD / 2;
-      clk_sti <= '1';
-      wait for CLK_PERIOD / 2;
+        clk_sti <= '0';
+        wait for CLK_PERIOD / 2;
+        clk_sti <= '1';
+        wait for CLK_PERIOD / 2;
+        if sim_end = true then
+            report "Fin de la simulation." severity NOTE;
+            wait;
+        end if;
     end process;
     
     sti_process : process
-    variable data : std_logic_vector(DATA_SIZE-1 downto 0);
+        variable data : std_logic_vector(DATA_SIZE-1 downto 0);
     begin
-      from_agent_sti.data <= (others => '0');
-      from_agent_sti.addr <= (others => '0');
-      from_agent_sti.rd <= '0';
-      from_agent_sti.wr <= '0';
-      
-      wait until falling_edge(reset_sti);
-      wait for 10 ns;
-      wait until falling_edge(clk_sti);
-      
-      -- Ecriture
-      report "Ecriture !";
+        from_agent_sti.data <= (others => '0');
+        from_agent_sti.addr <= (others => '0');
+        from_agent_sti.rd <= '0';
+        from_agent_sti.wr <= '0';
+        
+        wait until falling_edge(reset_sti);
+        wait for 10 ns;
+        wait until falling_edge(clk_sti);
+        
+        -- Ecriture
+        report "Ecriture 1 !";
 
-      data := "10100101";
-      from_agent_sti.data <= data;
-      from_agent_sti.addr <= "000000000101";
-      from_agent_sti.wr <= '1';
-      wait until rising_edge(cache_to_agent_obs.busy);
-      from_agent_sti.wr <= '0';
-      wait until falling_edge(cache_to_agent_obs.busy);
-      report "Ecriture dans cache finie";
-      
-      -- Lecture
-      wait for 10 ns;
-      wait until falling_edge(clk_sti);
-      from_agent_sti.rd <= '1';
-      wait until rising_edge(cache_to_agent_obs.busy);
-      from_agent_sti.rd <= '0';
-      wait until falling_edge(cache_to_agent_obs.busy);
-      if (cache_to_agent_obs.data = data) then
-        report "C'est bon !";
-      else
-        report "Votre système est bô mal !";
-      end if;
-      
-      wait;
-      
+        data := "10100101";
+        from_agent_sti.data <= data;
+        from_agent_sti.addr <= "000000000101";
+        from_agent_sti.wr <= '1';
+        wait until rising_edge(cache_to_agent_obs.busy);
+        from_agent_sti.wr <= '0';
+        wait until falling_edge(cache_to_agent_obs.busy);
+        report "Ecriture dans cache finie";
+        
+        -- Ecriture
+        report "Ecriture 2 !";
+
+        data := "10100101";
+        from_agent_sti.data <= data;
+        from_agent_sti.addr <= "000000000110";
+        from_agent_sti.wr <= '1';
+        wait until rising_edge(cache_to_agent_obs.busy);
+        from_agent_sti.wr <= '0';
+        wait until falling_edge(cache_to_agent_obs.busy);
+        report "Ecriture dans cache finie";
+        
+        -- Lecture bonne adresse 
+        wait for 10 ns;
+        report "Lecture cache bonne adresse";
+        wait until falling_edge(clk_sti);
+        from_agent_sti.addr <= "000000000101";
+        from_agent_sti.rd <= '1';
+        wait until rising_edge(cache_to_agent_obs.busy);
+        from_agent_sti.rd <= '0';
+        wait until falling_edge(cache_to_agent_obs.busy);
+        if (cache_to_agent_obs.data = data) then
+            report "Lecture reussite" & LF &
+                "Valeur  : " & to_bstring(cache_to_agent_obs.data) & LF &
+                "Attendu : " & to_bstring(data);
+        else
+            report "Lecture echec" & LF &
+                "Valeur  : " & to_bstring(cache_to_agent_obs.data) & LF &
+                "Attendu : " & to_bstring(data);
+        end if;
+        
+        -- Lecture mauvais adresse
+        report "Lecture cache mauvaise adresse";
+        wait for 10 ns;
+        wait until falling_edge(clk_sti);
+        from_agent_sti.addr <= "100000000001";
+        from_agent_sti.rd <= '1';
+        wait until rising_edge(cache_to_agent_obs.busy);
+        from_agent_sti.rd <= '0';
+        wait until falling_edge(cache_to_agent_obs.busy);
+        if (cache_to_agent_obs.data = data) then
+            report "Lecture reussite" & LF &
+                "Valeur  : " & to_bstring(cache_to_agent_obs.data) & LF &
+                "Attendu : " & to_bstring(data);
+        else
+            report "Lecture echec" & LF &
+                "Valeur  : " & to_bstring(cache_to_agent_obs.data) & LF &
+                "Attendu : " & to_bstring(data);
+        end if;
+        
+        sim_end <= true;
+        wait;
+    
     end process;
     
     -- Processus de commande et synchronisation

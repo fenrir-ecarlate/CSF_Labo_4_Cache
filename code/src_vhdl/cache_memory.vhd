@@ -25,7 +25,6 @@ USE ieee.numeric_std.ALL;
 use IEEE.math_real.all;
 --library work;
 use work.cmf_pkg.all;
-use work.log_pkg.all;
 
 
 entity cache_memory is
@@ -110,13 +109,7 @@ architecture struct of cache_memory is
     signal cache_data_s : std_logic_vector(DATA_SIZE-1 downto 0);
     signal cache_hit_s : std_logic;
     signal burst_counter_s : unsigned(OFFSET_SIZE downto 0);
-    
-    -- Signal control
-    signal start_r_s, start_w_s : std_logic;
-    signal data_r_s, data_w_s : std_logic_vector(DATA_SIZE-1 downto 0);
-    signal data_ok_r_s, data_ok_w_s : std_logic;
-    signal done_r_s, done_w_s : std_logic;
-    signal cnt_burst_r_s, cnt_burst_w_s : std_logic_vector(ilogup(NUMBER_OF_WORDS_IN_CACHE_LINE)-1 downto 0);
+   
 begin
     assert (ADDR_SIZE-(TAG_SIZE+OFFSET_SIZE)) > 0 report "Address Malformation" severity failure;
     -- These asserts are used by simulation in order to check the generic 
@@ -226,7 +219,7 @@ begin
             next_state_s <= WAIT_FOR_DEMAND;
             
           when CHECK_DIRTY => -- Si dirty on doit stocker en mémoire
-            if (dirty_bits(index_v) = '1' and valid_bits(index_v) = '1') then
+            if (tags(index_v) /= cache_tag_s and dirty_bits(index_v) = '1' and valid_bits(index_v) = '1') then
               if (mem_i.busy = '1') then -- Attente de la mémoire
                 next_state_s <= CHECK_DIRTY;
               else  
