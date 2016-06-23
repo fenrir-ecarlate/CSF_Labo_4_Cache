@@ -100,7 +100,11 @@ architecture testbench of cache_memory_tb is
     signal synchro_verif  : std_logic;
     signal verification_going : std_logic;
 
-    constant CLK_PERIOD : time := 2 ns;
+    constant CLK_PERIOD : time := 2 ns; -- Attention la simulation de base fait
+                                        -- des pas de 1ns alors ne pas mettre
+                                        -- le clock en dessous de 2ns ou alors
+                                        -- changer les parametres de simulation
+                                        -- pour faire des pas plus petit que 500ps
 begin
         
     dut : cache_memory
@@ -163,6 +167,21 @@ begin
     end process;
     
     sti_process : process
+        procedure write_to_cache (data_in : in std_logic_vector(DATA_SIZE-1 downto 0);
+                                  addr_in : in std_logic_vector(ADDR_SIZE-1 downto 0)) is
+        begin
+          from_agent_sti.data <= data_in;
+          from_agent_sti.addr <= addr_in;
+          from_agent_sti.rd <= '0';
+          from_agent_sti.wr <= '1';
+          wait until rising_edge(cache_to_agent_obs.busy);
+          from_agent_sti.wr <= '0';
+          wait until falling_edge(cache_to_agent_obs.busy);
+          report "Ecriture de" & LF &
+                "Valeur   : " & to_bstring(data_in) & LF &
+                "Addresse : " & to_bstring(addr_in);
+        end write_to_cache;
+        
         variable data : std_logic_vector(DATA_SIZE-1 downto 0);
     begin
         from_agent_sti.data <= (others => '0');
@@ -177,14 +196,14 @@ begin
         -- Ecriture
         report "Ecriture 1 !";
 
+        data := (others => '1');
+        write_to_cache(data, "000000000101");
         data := "10100101";
-        from_agent_sti.data <= data;
-        from_agent_sti.addr <= "000000000101";
-        from_agent_sti.wr <= '1';
-        wait until rising_edge(cache_to_agent_obs.busy);
-        from_agent_sti.wr <= '0';
-        wait until falling_edge(cache_to_agent_obs.busy);
-        report "Ecriture dans cache finie";
+        write_to_cache(data, "000000000101"); -- Cette écriture devrait être
+                                              -- bien plus rapide car la ligne
+                                              -- est déjà en cache. On peut le
+                                              -- voir dans le test bench
+        wait for 10 ns;
         
         -- Ecriture
         report "Ecriture 2 !";
