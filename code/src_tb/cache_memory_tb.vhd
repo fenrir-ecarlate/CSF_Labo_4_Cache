@@ -165,6 +165,9 @@ begin
     end process;
     
     sti_process : process
+
+        -- Procédure qui permet de simuler une écriture dans la cache depuis l'agent.
+        -- Elle prends en argument la donnée à écrire et l'adresse de destination.
         procedure write_to_cache (data_in : in std_logic_vector(DATA_SIZE-1 downto 0);
                                   addr_in : in std_logic_vector(ADDR_SIZE-1 downto 0)) is
         begin
@@ -180,6 +183,9 @@ begin
                 "Adresse : " & to_bstring(addr_in);
         end write_to_cache;
 
+        -- Procédure qui permet de simuler la lecture d'une adresse donnée par
+        -- l'agent. Celui-ci passera par la cache qui elle aura la donnée ou
+        -- ira la demander à la mémoire.
         procedure read_cache (addr_in : in std_logic_vector(ADDR_SIZE-1 downto 0)) is
         begin
           from_agent_sti.addr <= addr_in;
@@ -193,6 +199,9 @@ begin
                 "Adresse : " & to_bstring(addr_in);
         end read_cache;
 
+        -- Procédure qui permet d'aller lire une addresse et qui vérifie si le
+        -- contenu est identique à la valeur expected_in.
+        -- Si les valeurs sont différentes on a un report avec severity FAILURE.
         procedure control_read (expected_in : in std_logic_vector(DATA_SIZE-1 downto 0);
                                 addr_in : in std_logic_vector(ADDR_SIZE-1 downto 0)) is
         begin
