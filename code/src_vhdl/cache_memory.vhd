@@ -86,12 +86,14 @@ architecture struct of cache_memory is
         READ_BEFORE_WRITE_1,
         READ_BEFORE_WRITE_2,
         WRITE_CACHE_WORD);
-    
+
+    -- La cache en elle-même ------------------------------------------
     signal cache : cache_type;            -- La cache (lignes de mots)
     signal dirty_bits : bit_array_type;   -- Les bits dirty de la cache
     signal valid_bits : bit_array_type;   -- Les bits valid
     signal tags : tag_type;               -- La liste des tags
-
+    -------------------------------------------------------------------
+    
     -- FSM
     signal state_s, next_state_s : STATE_TYPE;
     signal fsm_dready_out_s, fsm_busy_out_s, fsm_read_s, fsm_write_s : std_logic;
@@ -134,49 +136,61 @@ begin
     cache_tag_s <= fsm_addr_in_s(TAG_HIGH downto TAG_LOW);
     cache_index_s <= fsm_addr_in_s(INDEX_HIGH downto INDEX_LOW);
     cache_b_off_s <= fsm_addr_in_s(BLOCK_HIGH downto BLOCK_LOW);
-    
+
+    -- La gestion de la cache a été implémentée comme une machine séquentielle synchrone
     cache_fsm_process : process (clk_i, reset_i) is
-    variable index_v : integer;
+    variable index_v : integer; -- Variables pour se simplifier la vie dans les
+                                -- conversions.
     variable block_off_v : integer;
     begin
-      if (reset_i = '1') then
+      if (reset_i = '1') then -- Si RESET on va dans l'état de départ RESET
         state_s <= RESET;
         next_state_s <= RESET;
-      elsif rising_edge(clk_i) then
+        
+      elsif rising_edge(clk_i) then -- Sinon la machine est synchrone
+
+        -- Conversions
         index_v := to_integer(unsigned(cache_index_s));
         block_off_v := to_integer(unsigned(cache_b_off_s));
+
+        -- FSM
         case state_s is
-          
           when RESET => -- Etat de départ
             next_state_s <= INIT;
             fsm_addr_in_s <= (others => '0');
             fsm_word_in_s <= (others => '0');
             burst_counter_s <= (others => '0');
+            mem_o.rd <= '0';
+            mem_o.wr <= '0';
+            fsm_busy_out_s <= '1'; -- Pas encore prête
             
           when INIT => -- Initialisations
             valid_bits <= (others => '0'); -- Ceci suffit la cache n'a pas
                                            -- besoin d'être mise à zéro
             dirty_bits <= (others => '0'); -- Tout est beau propre !
             fsm_dready_out_s <= '0';
-            fsm_busy_out_s <= '0';
+            fsm_busy_out_s <= '0'; -- On sera prêt !
             fsm_data_out_s <= (others => '0');
             next_state_s <= WAIT_FOR_DEMAND;
             
-          when WAIT_FOR_DEMAND =>
+          when WAIT_FOR_DEMAND => -- Cache en attente de demande
             mem_o.rd <= '0';
             mem_o.wr <= '0';
             burst_counter_s <= (others => '0');
+            
             if (fsm_read_s = '1') then -- read prioritaire au write (mais avoir les deux n'aurait pas de sens)
               next_state_s <= READ_CACHE;
               fsm_dready_out_s <= '0';
               fsm_busy_out_s <= '1';
               fsm_addr_in_s <= agent_i.addr;
-            elsif (fsm_write_s = '1') then
+              
+            elsif (fsm_write_s = '1') then -- write
               fsm_word_in_s <= agent_i.data;
               fsm_addr_in_s <= agent_i.addr;
               next_state_s <= CHECK_DIRTY;
               fsm_busy_out_s <= '1';
-            else
+              
+            else -- On ne fait rien
               next_state_s <= WAIT_FOR_DEMAND; -- Etat d'attente
               fsm_busy_out_s <= '0';
             end if;
@@ -184,11 +198,14 @@ begin
           when READ_CACHE =>
             -- vérifie s'il y a hit
             if (tags(index_v) = cache_tag_s and valid_bits(index_v) = '1') then
-              next_state_s <= GIVE_DATA;
+              next_state_s <= GIVE_DATA; -- Si il y a hit on va pouvoir fournir
+                                         -- les data directement à l'agent
             elsif (tags(index_v) /= cache_tag_s and valid_bits(index_v) = '1' and dirty_bits(index_v) = '1') then
-              if (mem_i.busy = '1') then
+              -- On doit remplacer la ligne de cache par une autre et que la
+              -- ligne actuelle est dirty il va falloir la stocker en ram.
+              if (mem_i.busy = '1') then -- Si la ram est occupée on attend
                 next_state_s <= READ_CACHE;
-              else
+              else -- On écrit l'ancienne ligne en RAM
                 mem_o.wr <= '1';
                 mem_o.rd <= '0';
                 mem_o.burst <= '1';
@@ -198,25 +215,29 @@ begin
                 burst_counter_s <= (others => '0');
                 next_state_s <= WRITE_BEFORE_READ;
               end if;
-            else
+            else -- Sinon l'ancienne ligne n'était pas valid ou pas dirty on
+                 -- peut simplement la remplacer par le contenu RAM
               next_state_s <= READ_BURST_1;
             end if;
 
-          when WRITE_BEFORE_READ =>
+          when WRITE_BEFORE_READ => -- Ici on écrit l'ancienne ligne de cache
+                                    -- en RAM avant de la remplacer
             mem_o.wr <= '0'; -- Le write en burst a été lancé
             if (mem_i.busy = '1') then
                 next_state_s <= WRITE_BEFORE_READ;
             else
                 if (burst_counter_s = NUMBER_OF_WORDS_IN_CACHE_LINE) then
+                  -- Ici tout est écrit alors on peut continuer
                     next_state_s <= READ_BURST_1;
                 else
+                  -- Prochain mot à stocker en RAM
                     mem_o.data <= cache(index_v)((to_integer(burst_counter_s)+1) * DATA_SIZE - 1 downto to_integer(burst_counter_s) * DATA_SIZE);
                     burst_counter_s <= burst_counter_s + 1;
                     next_state_s <= WRITE_BEFORE_READ;
                 end if;
             end if;
             
-          when READ_BURST_1 =>
+          when READ_BURST_1 => -- Lecture de la ligne de cache en RAM
             if (mem_i.busy = '1') then -- Attente sur la mémoire
                 next_state_s <= READ_BURST_1;
             else
@@ -235,7 +256,8 @@ begin
                 -- Fini de lire
                 valid_bits(index_v) <= '1'; -- Les données sont maintenant valides
                 tags(index_v) <= cache_tag_s; -- màj du tag
-                next_state_s <= GIVE_DATA;
+                next_state_s <= GIVE_DATA; -- La ligne a été mise à jour on
+                                           -- peut donner les données à l'agent
             else
                 if (mem_i.dready = '1') then -- Attente sur la mémoire
                     -- Mise à jour de la cache
@@ -245,17 +267,18 @@ begin
                 next_state_s <= READ_BURST_2;
             end if;
           
-          when GIVE_DATA =>
+          when GIVE_DATA => -- Fournit les données à l'agent
             fsm_data_out_s <= cache(index_v)((block_off_v+1) * DATA_SIZE - 1 downto block_off_v * DATA_SIZE);
             fsm_dready_out_s <= '1';
             fsm_busy_out_s <= '0';
-            next_state_s <= WAIT_FOR_DEMAND;
+            next_state_s <= WAIT_FOR_DEMAND; -- Et revient à l'état d'attente
             
           when CHECK_DIRTY => -- Si dirty on doit stocker en mémoire
             if (tags(index_v) /= cache_tag_s and dirty_bits(index_v) = '1' and valid_bits(index_v) = '1') then
               if (mem_i.busy = '1') then -- Attente de la mémoire
                 next_state_s <= CHECK_DIRTY;
-              else  
+              else  -- Ecriture de l'ancienne ligne de cache en mémoire avant
+                    -- de l'écraser
                 mem_o.wr <= '1';
                 mem_o.rd <= '0';
                 mem_o.burst <= '1';
@@ -266,7 +289,8 @@ begin
                 next_state_s <= WRITE_BURST_1;
               end if;
             else
-              next_state_s <= HIT_AND_VALID;
+              next_state_s <= HIT_AND_VALID; -- Regarder si le contenu de la
+                                             -- cache est valide et le bon
             end if;
           
           when WRITE_BURST_1 =>
@@ -286,12 +310,16 @@ begin
           
           when HIT_AND_VALID =>
             if (tags(index_v) = cache_tag_s and valid_bits(index_v) = '1') then
-              next_state_s <= WRITE_CACHE_WORD;
+              next_state_s <= WRITE_CACHE_WORD; -- Si la ligne est valide et la
+                                                -- bonne on peut juste la
+                                                -- mettre à jour
             else
-              next_state_s <= READ_BEFORE_WRITE_1;
+              next_state_s <= READ_BEFORE_WRITE_1; -- Sinon on doit la lire
+                                                   -- avant de la mettre à jour
             end if;
             
-          when READ_BEFORE_WRITE_1 =>
+          when READ_BEFORE_WRITE_1 => -- Lecture de la ligne de cache avant
+                                      -- d'en mettre à jour un mot
             if (mem_i.busy = '1') then -- Attente sur la mémoire
                 next_state_s <= READ_BEFORE_WRITE_1;
             else
@@ -321,17 +349,23 @@ begin
             end if;
             -- Récuperer la ligne de cache en mémoire avant d'écrire un mot dessus
             
-          when WRITE_CACHE_WORD =>
+          when WRITE_CACHE_WORD => -- Mise à jour du mot dans la ligne de cache
             cache(index_v)((block_off_v+1) * DATA_SIZE - 1 downto block_off_v * DATA_SIZE) <= fsm_word_in_s;
             dirty_bits(index_v) <= '1'; -- Ecriture en cache donc dirty
             fsm_busy_out_s <= '0';
-            next_state_s <= WAIT_FOR_DEMAND;
+            next_state_s <= WAIT_FOR_DEMAND; -- Etat d'attente de demande
             
         end case;
             
       end if;
-      state_s <= next_state_s;
+      state_s <= next_state_s; -- Mise à jour de la FSM
     end process;
+
+    -- Note : On aurait pu grouper les états d'écriture dans la RAM et de
+    -- lecture dans la RAM plutôt que d'avoir 4 états selon si on est dans la
+    -- branche de lecture ou d'écriture à l'aide de signaux de contrôle.
+    -- Cela aurait "simplifié" la machine d'état de 2 états mais il y aurait
+    -- plus de tests de redirection du flux de contrôle...
 
 end struct;
 
