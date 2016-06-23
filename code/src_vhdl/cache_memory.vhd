@@ -202,6 +202,8 @@ begin
           when READ_BURST_2 =>
             if (burst_counter_s = NUMBER_OF_WORDS_IN_CACHE_LINE) then
                 mem_o.rd <= '0'; -- Fini de lire
+                valid_bits(index_v) <= '1'; -- Les données sont maintenant valides
+                tags(index_v) <= cache_tag_s; -- màj du tag
                 next_state_s <= GIVE_DATA;
             else
                 if (mem_i.dready = '1') then -- Attente sur la mémoire

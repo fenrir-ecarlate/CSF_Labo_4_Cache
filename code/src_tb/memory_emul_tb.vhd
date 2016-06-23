@@ -55,6 +55,8 @@ begin
   
   process
     begin
+      memory <= (others => (others => '0'));
+      
       wait until rising_edge(clk_i);
       mem_o.busy <= '0';
       mem_o.dready <= '0';

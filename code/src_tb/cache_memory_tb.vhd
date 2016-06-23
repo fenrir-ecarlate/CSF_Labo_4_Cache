@@ -179,9 +179,37 @@ begin
           wait until falling_edge(cache_to_agent_obs.busy);
           report "Ecriture de" & LF &
                 "Valeur   : " & to_bstring(data_in) & LF &
-                "Addresse : " & to_bstring(addr_in);
+                "Adresse : " & to_bstring(addr_in);
         end write_to_cache;
-        
+
+        procedure read_cache (addr_in : in std_logic_vector(ADDR_SIZE-1 downto 0)) is
+        begin
+          from_agent_sti.addr <= addr_in;
+          from_agent_sti.rd <= '1';
+          from_agent_sti.wr <= '0';
+          wait until rising_edge(cache_to_agent_obs.busy);
+          from_agent_sti.rd <= '0';
+          wait until falling_edge(cache_to_agent_obs.busy);
+          report "Lecture de" & LF &
+                "Valeur  : " & to_bstring(cache_to_agent_obs.data) & LF &
+                "Adresse : " & to_bstring(addr_in);
+        end read_cache;
+
+        procedure control_read (expected_in : in std_logic_vector(DATA_SIZE-1 downto 0);
+                                addr_in : in std_logic_vector(ADDR_SIZE-1 downto 0)) is
+        begin
+          read_cache (addr_in);
+          if (cache_to_agent_obs.data = expected_in) then
+            report "Résultat attendu" & LF &
+                "Valeur  : " & to_bstring(cache_to_agent_obs.data) & LF &
+                "Attendu : " & to_bstring(expected_in);
+          else
+            report "Résultat inattendu" & LF &
+                "Valeur  : " & to_bstring(cache_to_agent_obs.data) & LF &
+                "Attendu : " & to_bstring(expected_in);
+          end if;
+        end control_read;
+          
         variable data : std_logic_vector(DATA_SIZE-1 downto 0);
     begin
         from_agent_sti.data <= (others => '0');
@@ -208,39 +236,30 @@ begin
         -- Ecriture
         report "Ecriture 2 !";
 
-        data := "10100101";
-        from_agent_sti.data <= data;
-        from_agent_sti.addr <= "000000000110";
-        from_agent_sti.wr <= '1';
-        wait until rising_edge(cache_to_agent_obs.busy);
-        from_agent_sti.wr <= '0';
-        wait until falling_edge(cache_to_agent_obs.busy);
-        report "Ecriture dans cache finie";
+        data := "10101010";
+        write_to_cache(data, "000000000000");
+        write_to_cache(data, "000000000001"); -- Cette écriture est plus rapide
+                                              -- car dans la même ligne de cache
+
+        wait for 10 ns;
         
         -- Lecture bonne adresse 
         wait for 10 ns;
         report "Lecture cache bonne adresse";
         wait until falling_edge(clk_sti);
-        from_agent_sti.addr <= "000000000101";
-        from_agent_sti.rd <= '1';
-        wait until rising_edge(cache_to_agent_obs.busy);
-        from_agent_sti.rd <= '0';
-        wait until falling_edge(cache_to_agent_obs.busy);
-        if (cache_to_agent_obs.data = data) then
-            report "Lecture reussite" & LF &
-                "Valeur  : " & to_bstring(cache_to_agent_obs.data) & LF &
-                "Attendu : " & to_bstring(data);
-        else
-            report "Lecture echec" & LF &
-                "Valeur  : " & to_bstring(cache_to_agent_obs.data) & LF &
-                "Attendu : " & to_bstring(data);
-        end if;
+        -- Ces deux lectures sont ultra rapides car déjà dans la ligne de cache
+        control_read(data, "000000000000");
+        control_read(data, "000000000001");
+
+        -- Lecture lente car pas dans la cache
+        control_read((others => '0'), "000000000010");
+        control_read((others => '0'), "000000000011");
         
         -- Lecture mauvais adresse
         report "Lecture cache mauvaise adresse";
         wait for 10 ns;
         wait until falling_edge(clk_sti);
-        from_agent_sti.addr <= "100000000001";
+        from_agent_sti.addr <= "000000100000";
         from_agent_sti.rd <= '1';
         wait until rising_edge(cache_to_agent_obs.busy);
         from_agent_sti.rd <= '0';
