@@ -279,6 +279,35 @@ begin
           control_read(std_logic_vector(to_unsigned(i, DATA_SIZE)),
                        std_logic_vector(to_unsigned(i, ADDR_SIZE)));
         end loop;
+
+        -- On écrit une plage d'adresses 8 bits (la mémoire émulée, émule une
+        -- plage 8bits et on remplit cette zone avec les valeurs de 0 à 255)
+        for i in 255 downto 0 loop
+          write_to_cache(std_logic_vector(to_unsigned(i, DATA_SIZE)),
+                         std_logic_vector(to_unsigned(i, ADDR_SIZE)));
+        end loop;
+
+        -- On va maintenant vérifier que les données sont bien conservées
+        -- (elles sont soit directement dans la cache soit dans la mémoire et
+        -- la cache ira les récupérer).
+        for i in 255 downto 0 loop
+          control_read(std_logic_vector(to_unsigned(i, DATA_SIZE)),
+                       std_logic_vector(to_unsigned(i, ADDR_SIZE)));
+        end loop;
+
+        -- Accès locaux méga rapides ! (Que des HITS)
+        for i in 0 to 9 loop
+          write_to_cache(std_logic_vector(to_unsigned(i, DATA_SIZE)),
+                         std_logic_vector(to_unsigned(i, ADDR_SIZE)));
+          write_to_cache(std_logic_vector(to_unsigned(i+i, DATA_SIZE)),
+                         std_logic_vector(to_unsigned(i, ADDR_SIZE)));
+          write_to_cache(std_logic_vector(to_unsigned(i+i+i, DATA_SIZE)),
+                         std_logic_vector(to_unsigned(i, ADDR_SIZE)));
+        end loop;
+        for i in 0 to 9 loop
+          control_read(std_logic_vector(to_unsigned(3*i, DATA_SIZE)),
+                       std_logic_vector(to_unsigned(i, ADDR_SIZE)));
+        end loop;
         
         sim_end <= true;
         wait;
