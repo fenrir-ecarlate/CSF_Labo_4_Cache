@@ -162,6 +162,8 @@ begin
             next_state_s <= WAIT_FOR_DEMAND;
             
           when WAIT_FOR_DEMAND =>
+            mem_o.rd <= '0';
+            mem_o.wr <= '0';
             burst_counter_s <= (others => '0');
             if (fsm_read_s = '1') then -- read prioritaire au write (mais avoir les deux n'aurait pas de sens)
               next_state_s <= READ_CACHE;
@@ -231,7 +233,7 @@ begin
                 mem_o.addr <= tags(index_v) & cache_index_s & std_logic_vector(to_unsigned(0, OFFSET_SIZE)); -- Addresse de l'ancienne ligne de cache
                 mem_o.data <= cache(index_v)((to_integer(burst_counter_s)+1) * DATA_SIZE - 1 downto to_integer(burst_counter_s) * DATA_SIZE);
                 mem_o.burst_range <= std_logic_vector(to_unsigned(NUMBER_OF_WORDS_IN_CACHE_LINE, mem_o.burst_range'length));
-                burst_counter_s <= burst_counter_s + 1;
+                burst_counter_s <= (others => '0');
                 next_state_s <= WRITE_BURST_1;
               end if;
             else
