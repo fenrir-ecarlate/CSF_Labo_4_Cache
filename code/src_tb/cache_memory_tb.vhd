@@ -27,11 +27,21 @@ use IEEE.NUMERIC_STD.ALL;
 library work;
 use work.cmf_pkg.all;
 
+-------------------------------------------------------------------------------
+-- Ces paramètres ont été choisi pour avoir des lignes de 16 mots dans la cache
+-- ADDR_SIZE = TAG_SIZE + INDEX_SIZE + WORD_OFFSET_SIZE
+-- Ici 12 = 4 + 4 + 4 et donc WORD_OFFSET_SIZE = 4 donc on a 16 mots par ligne
+--
+-- On aurait aussi pu faire 12 = 5 + 6 + 1 et donc WORD_OFFSET_SIZE = 1 et on
+-- aurait 2 mots par ligne ! (cela fonctionne aussi, mais la cache sera plus
+-- lente lors des premiers accès car il y aura des accès burst de 2 mots à la
+-- mémoire et non des accès de 16 mots à la fois)
+-------------------------------------------------------------------------------
 entity cache_memory_tb is
 generic(
     ADDR_SIZE         : integer :=12;
-    INDEX_SIZE        : integer :=5;   --Memory depth = 2^INDEX_SIZE                
-    TAG_SIZE          : integer :=6;   --TAG_SIZE must have the same size than the DDR3 memory @ddress - INDEX
+    INDEX_SIZE        : integer :=4;   --Memory depth = 2^INDEX_SIZE                
+    TAG_SIZE          : integer :=4;   --TAG_SIZE must have the same size than the DDR3 memory @ddress - INDEX
     DATA_SIZE         : integer :=8    --Data field must have the same size than the DDR3 memory data  
 );    
 end cache_memory_tb;
@@ -238,6 +248,8 @@ begin
                                               -- bien plus rapide car la ligne
                                               -- est déjà en cache. On peut le
                                               -- voir dans le test bench
+	control_read(data, "000000000101");
+
         wait for 10 ns;
         
         -- Ecriture 2

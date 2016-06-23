@@ -45,7 +45,7 @@ end memory_emul_tb;
 
 architecture testbench of memory_emul_tb is
   -- Constants
-  constant READ_LATENCY_CLKS : integer := 20;
+  constant READ_LATENCY_CLKS : integer := 10;
   
   -- Signals
   -- On ne va simuler qu'une partie de la mémoire (adresses de 0xFF à 0x0)
@@ -65,7 +65,7 @@ begin
         if (mem_i.wr = '1') then
           if (mem_i.burst = '0') then -- Ecriture simple
             mem_o.busy <= '1';
-            for i in 0 to READ_LATENCY_CLKS loop -- Simulation de latence
+            for i in 0 to 5*READ_LATENCY_CLKS loop -- Simulation de latence
               wait until rising_edge(clk_i);
             end loop;
             memory(to_integer(unsigned(mem_i.addr(7 downto 0)))) <= mem_i.data;
@@ -88,7 +88,7 @@ begin
           if (mem_i.burst = '0') then -- Lecture simple
             mem_o.busy <= '1';
             mem_o.dready <= '0';
-            for i in 0 to READ_LATENCY_CLKS loop -- Simulation de latence
+            for i in 0 to 5*READ_LATENCY_CLKS loop -- Simulation de latence
               wait until rising_edge(clk_i);
             end loop;
             mem_o.busy <= '0';
