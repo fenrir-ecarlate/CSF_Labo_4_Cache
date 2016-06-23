@@ -92,13 +92,11 @@ architecture testbench of cache_memory_tb is
                                             addr(ADDR_SIZE-1 downto 0),
                                             data(DATA_SIZE-1 downto 0));
 
-
+    -- Non utilisé
     signal monitor_obs    : cache_monitor_t;                                  
 
+    -- Fin de simulation
     signal sim_end : boolean := false;
-    
-    signal synchro_verif  : std_logic;
-    signal verification_going : std_logic;
 
     constant CLK_PERIOD : time := 2 ns; -- Attention la simulation de base fait
                                         -- des pas de 1ns alors ne pas mettre
@@ -221,7 +219,7 @@ begin
         wait for 10 ns;
         wait until falling_edge(clk_sti);
         
-        -- Ecriture
+        -- Ecriture 1
         report "Ecriture 1 !";
 
         data := (others => '1');
@@ -233,7 +231,7 @@ begin
                                               -- voir dans le test bench
         wait for 10 ns;
         
-        -- Ecriture
+        -- Ecriture 2
         report "Ecriture 2 !";
 
         data := "10101010";
@@ -250,12 +248,14 @@ begin
         control_read(data, "000000000001");
 
         -- Lecture lente car pas dans la cache
+        -- (Memoire init à 0)
         control_read((others => '0'), "000000000010");
         -- Lecture rapide car la ligne a été cachée par la lecture ci-dessus
         control_read((others => '0'), "000000000011");
         wait for 10 ns;
         
         -- Collision test
+        -- On peut voir qu'on ne perds pas de données
         write_to_cache((others => '1'), "000000111110");
         control_read((others => '1'), "000000111110");
         write_to_cache(data, "000011111110"); -- Collisionne dans la cache donc
@@ -267,6 +267,7 @@ begin
 
         -- On écrit une plage d'adresses 8 bits (la mémoire émulée, émule une
         -- plage 8bits et on remplit cette zone avec les valeurs de 0 à 255)
+        -- Ce test générera des collisions et va devoir stocker en mémoire.
         for i in 0 to 255 loop
           write_to_cache(std_logic_vector(to_unsigned(i, DATA_SIZE)),
                          std_logic_vector(to_unsigned(i, ADDR_SIZE)));
@@ -280,8 +281,7 @@ begin
                        std_logic_vector(to_unsigned(i, ADDR_SIZE)));
         end loop;
 
-        -- On écrit une plage d'adresses 8 bits (la mémoire émulée, émule une
-        -- plage 8bits et on remplit cette zone avec les valeurs de 0 à 255)
+        -- Même test mais avec le parcours dans l'autre sens
         for i in 255 downto 0 loop
           write_to_cache(std_logic_vector(to_unsigned(i, DATA_SIZE)),
                          std_logic_vector(to_unsigned(i, ADDR_SIZE)));
@@ -295,16 +295,22 @@ begin
                        std_logic_vector(to_unsigned(i, ADDR_SIZE)));
         end loop;
 
+        -- Test de la Cache dans un contexte local avec plusieurs écritures
+        -- successives.
         -- Accès locaux méga rapides ! (Que des HITS)
         for i in 0 to 9 loop
+          -- 3 accès en écriture de suite au même endroit
           write_to_cache(std_logic_vector(to_unsigned(i, DATA_SIZE)),
                          std_logic_vector(to_unsigned(i, ADDR_SIZE)));
-          write_to_cache(std_logic_vector(to_unsigned(i+i, DATA_SIZE)),
+          write_to_cache(std_logic_vector(to_unsigned(2*i, DATA_SIZE)),
                          std_logic_vector(to_unsigned(i, ADDR_SIZE)));
-          write_to_cache(std_logic_vector(to_unsigned(i+i+i, DATA_SIZE)),
+          write_to_cache(std_logic_vector(to_unsigned(3*i, DATA_SIZE)),
                          std_logic_vector(to_unsigned(i, ADDR_SIZE)));
         end loop;
+
+        -- Vérification de l'intégrité de ces données
         for i in 0 to 9 loop
+          -- Lecture de ces endroits locaux
           control_read(std_logic_vector(to_unsigned(3*i, DATA_SIZE)),
                        std_logic_vector(to_unsigned(i, ADDR_SIZE)));
         end loop;
@@ -313,41 +319,6 @@ begin
         wait;
     
     end process;
-    
-    -- Processus de commande et synchronisation
-    --chef_d_orchestre: process
-    --begin
-    --  synchro_verif <= '1';
-    --  wait until rising_edge(verification_going);
-    --  loop
-    --    wait for 10 ns;
-    --    synchro_verif <= '0';
-    --    wait for 10 ns;
-    --    synchro_verif <= '1';
-    --    if verification_going = '0' then
-    --      wait for 20 ns;
-    --      report "Fin de la verification !";
-    --      wait;
-    --    end if;
-    --  end loop;
-    --end process;
-
-    --stimuli: process
-    --begin
-
-    --end process;
-
-    --verification: process
-    --  wait until rising_edge(verification_going); -- Pourrait être fait autrement
-
-    --  loop
-    --    wait until rising_edge(synchro_verif); -- On est synchronisé avec tout
-    --                                           -- le monde
-
-    --  end loop;
-
-    --  wait;
-    --end process;
 
 end testbench;
 
