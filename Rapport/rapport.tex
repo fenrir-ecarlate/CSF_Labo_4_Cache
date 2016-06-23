@@ -1,0 +1,127 @@
+% Compiler ce document 
+
+% package de base
+\documentclass[10pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{listings}
+
+% langues
+\usepackage[usenames,dvipsnames]{xcolor}
+\usepackage[francais]{babel}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{tabularx}
+\usepackage{colortbl}
+\usepackage[hidelinks]{hyperref} % liens
+\usepackage{fancyhdr} % En tetes / bas de page
+\usepackage{helvet} % police helvetica
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor} % Style pour affichage du C
+\usepackage{courier} % police pour les listings
+\usepackage{tikz}
+
+\usepackage{listingsutf8}
+
+% Page de Garde -- Necessite d'installer le package titling, si probleme
+% commenter la ligne suivante ainsi que les infos necessaires a la page
+% de garde
+\usepackage{pageGarde/Garde_perso}
+
+\input{utils/myCommands.tex}
+\input{utils/myColors.tex}
+\input{utils/myConfigurations.tex}
+
+% Mise en forme de la page de titre
+\author{João Miguel Domingues Pedrosa\\Rick Wertenbroek}
+\title{Mémoire cache}
+\dest{}
+
+% Informations necessaires a la page de garde
+% Commenter si probleme de compilation
+\acro{CSF}
+\matter{Conception de système numérique sur FPGA}
+\date{\today}
+
+%en-tête
+\lhead{Domingues \& Wertenbroek}
+\chead{Mémoire cache}
+\rhead{\theAcro}
+
+%pied-de-page
+\lfoot{HEIG-VD}
+\cfoot{\today}
+\rfoot{\thepage}
+
+\begin{document}
+\maketitle
+\newpage
+\tableofcontents
+\newpage
+
+%Ici commence réelement l'écriture du rapport
+\section{Introduction}
+Pour ce laboratoire, nous avons dû implémenter une mémoire cache interne à une FPGA. La mémoire cache sert à accélérer les accès en mémoire en allant chercher les données dans une zone mémoire plus petit mais plus proche donc plus rapide. Il faut donc interface, avec un simple bus, les accès entre l'utilisateur (agent) et la mémoire externe (DDR).
+
+\section{Mémoire Cache}
+\subsection{Mémoire}
+La mémoire se sépare en plusieurs attributs qui sont les suivants:\\
+
+\begin{itemize}
+	\item Data (vecteur): il s'agit des données
+	\item Tag  (vecteur): permet de vérifier si le bloque mémoire rechercher est juste
+	\item Valid (bit): indique si la ligne en cache est initialisé
+	\item Dirty (bit): indique si il y a eu un accès écriture dans la ligne\\
+\end{itemize}
+
+Pour chaque attributs, nous avons un tableau de la taille du nombre de ligne en cache que l'on accédera grâce à l'index retrouvé par l'adresse rechercher par l'agent.
+
+\newpage
+
+\subsection{Contrôleur}
+Pour représenter le fonctionnement de la cache, nous sommes parties d'une machine d'état.
+
+\begin{center}
+
+\includegraphics[width=1.3\textwidth, angle=-90]{images/mss}
+
+\end{center}
+
+\newpage
+
+On commence tout d'abord par une initialisation des différents attributs de la cache. Il s'agit notamment de mettre les bits \texttt{valid} et \texttt{dirty} à 0 pour indiquer que la cache est vide et qu'elle doit donc être rempli.\\
+
+Ensuite, dans \texttt{wait for demand}, on attend un signal de lecture ou écriture (\texttt{rd} ou \texttt{wr}). On est après redirigé dans la partie concerner.
+
+\subsubsection{Lecture}
+Pour la lecture, on vérifie d'abord s'il y a un hit. Pour cela, on vérifie si le tag trouvé via l'adresse correspond à celui en cache et que la ligne est valide.
+Si la réponse est positive, on récupère directement la valeur dans la mémoire cache sinon, on doit chercher en mémoire d'abord.
+L'accès en mémoire se fait à chaque fois en burst et de la manière suivante:
+
+\begin{center}
+
+\includegraphics[width=0.7\textwidth, angle=-90]{images/mss_read}
+
+\end{center}
+
+On attend tout d'abord sur le busy car il se peut que la mémoire soit occupé lorsqu'on veut l’accéder. Une fois la mémoire libre, on lui demande les données, on vérifie qu'elles soit prêtent et les enregistres. On vérifie que la mémoire à finit le transfère via un compteur que l'on incrémente à chaque fois qu'une donnée a été récupérer avec succès.
+
+\subsubsection{Écriture}
+Pour l'écriture, on doit d'abord vérifier que la ligne à écrire contient le bon tag et dans le cas contraire qu'elle n'est pas \texttt{dirty}. Dans le cas où la réponse est négative, il faut écrire dans la mémoire pour la mettre à jour avant de changer le contenu de la cache car le bloque mémoire accédé sera différent.
+L'écriture se fait en burst et se fait de la manière suivante:  
+\begin{center}
+
+\includegraphics[width=0.5\textwidth, angle=-90]{images/mss_write}
+
+\end{center}
+Par rapport à la lecture, on n'attend toujours sur busy avant de passer la valeur.\\
+
+Avant d'écrire en cache, on doit s’assurer que la ligne est valide. On évite ainsi d'écrire dans une ligne qui n'a pas de valeur cohérente par rapport à la mémoire, ce qui la fausserai plus tard dans l’exécution. Si la ligne est invalide, on fait une lecture en burst dans la mémoire. Une fois ceci fais, on modifie la valeur en cache et on met le bit \texttt{dirty} de la ligne à 1.
+
+\section{Mémoire simulée}
+
+\section{Conclusion}
+
+\end{document}
