@@ -49,7 +49,7 @@ architecture testbench of memory_emul_tb is
   
   -- Signals
   -- On ne va simuler qu'une partie de la mémoire (adresses de 0xFF à 0x0)
-  type memory_type is array (0 to 2**7-1) of std_logic_vector(DATA_SIZE-1 downto 0);
+  type memory_type is array (0 to 2**8-1) of std_logic_vector(DATA_SIZE-1 downto 0);
   signal memory : memory_type; -- La mémoire
 begin
   

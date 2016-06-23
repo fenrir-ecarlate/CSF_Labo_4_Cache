@@ -206,7 +206,7 @@ begin
           else
             report "Résultat inattendu" & LF &
                 "Valeur  : " & to_bstring(cache_to_agent_obs.data) & LF &
-                "Attendu : " & to_bstring(expected_in);
+                "Attendu : " & to_bstring(expected_in) severity failure;
           end if;
         end control_read;
           
@@ -240,11 +240,9 @@ begin
         write_to_cache(data, "000000000000");
         write_to_cache(data, "000000000001"); -- Cette écriture est plus rapide
                                               -- car dans la même ligne de cache
-
         wait for 10 ns;
         
         -- Lecture bonne adresse 
-        wait for 10 ns;
         report "Lecture cache bonne adresse";
         wait until falling_edge(clk_sti);
         -- Ces deux lectures sont ultra rapides car déjà dans la ligne de cache
@@ -253,26 +251,19 @@ begin
 
         -- Lecture lente car pas dans la cache
         control_read((others => '0'), "000000000010");
+        -- Lecture rapide car la ligne a été cachée par la lecture ci-dessus
         control_read((others => '0'), "000000000011");
-        
-        -- Lecture mauvais adresse
-        report "Lecture cache mauvaise adresse";
         wait for 10 ns;
-        wait until falling_edge(clk_sti);
-        from_agent_sti.addr <= "000000100000";
-        from_agent_sti.rd <= '1';
-        wait until rising_edge(cache_to_agent_obs.busy);
-        from_agent_sti.rd <= '0';
-        wait until falling_edge(cache_to_agent_obs.busy);
-        if (cache_to_agent_obs.data = data) then
-            report "Lecture reussite" & LF &
-                "Valeur  : " & to_bstring(cache_to_agent_obs.data) & LF &
-                "Attendu : " & to_bstring(data);
-        else
-            report "Lecture echec" & LF &
-                "Valeur  : " & to_bstring(cache_to_agent_obs.data) & LF &
-                "Attendu : " & to_bstring(data);
-        end if;
+        
+        -- Collision test
+        write_to_cache((others => '1'), "000000111110");
+        control_read((others => '1'), "000000111110");
+        write_to_cache(data, "000011111110"); -- Collisionne dans la cache donc
+                                              -- la cache doit stocker en
+                                              -- mémoire la ligne précédente
+        control_read(data, "000011111110"); -- Tester la lecture
+        control_read((others => '1'), "000000111110"); -- La cache doit aller
+                                                       -- chercher en mémoire
         
         sim_end <= true;
         wait;
