@@ -1,0 +1,45 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Authors: Nicolas Kobel, João Miguel Domingues Pedrosa 
+% Date:    27/10/2014
+% Version: 1.0
+%
+% Description: Page de garde personnalisé, adapter pour
+%              des rapports professionels
+%
+%%| Modifications |%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+% Version   Auteur      Date               Description
+% 1.0       NKB         27/10/2014         Première implémention
+% 1.1       JDP         19/04/2016         Noms des commandes générique 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\NeedsTeXFormat{LaTeX2e}[1994/06/01]
+\ProvidesPackage{Garde_Perso}[2016/4/19 beta]
+
+
+\RequirePackage{titling} % For use with Title Page
+\RequirePackage{graphicx}
+
+% New fields relative to assignement
+\newcommand{\@institution}{}
+\newcommand{\institution}[1]{\renewcommand{\@institution}{#1}}
+\newcommand{\theInstitution}{\@institution}
+
+\newcommand{\@matter}{}
+\newcommand{\matter}[1]{\renewcommand{\@matter}{#1}}
+\newcommand{\theMatter}{\@matter}
+
+\newcommand{\@acro}{}
+\newcommand{\acro}[1]{\renewcommand{\@acro}{#1}}
+\newcommand{\theAcro}{\@acro}
+
+\newcommand{\@dest}{}
+\newcommand{\dest}[1]{\renewcommand{\@dest}{#1}}
+\newcommand{\theDest}{\@dest}
+
+\newcommand{\HRule}{\rule{\linewidth}{0.5mm}} % Defines a new command for the horizontal lines, change thickness here
+
+\renewcommand{\maketitle}{\input{pageGarde/Garde_titlepage}}
+
+
+\endinput
