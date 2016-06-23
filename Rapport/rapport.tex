@@ -63,7 +63,7 @@
 
 %Ici commence réelement l'écriture du rapport
 \section{Introduction}
-Pour ce laboratoire, nous avons dû implémenter une mémoire cache interne à une FPGA. La mémoire cache sert à accélérer les accès en mémoire en allant chercher les données dans une zone mémoire plus petit mais plus proche donc plus rapide. Il faut donc interface, avec un simple bus, les accès entre l'utilisateur (agent) et la mémoire externe (DDR).
+Pour ce laboratoire, nous avons dû implémenter une mémoire cache interne à une FPGA. La mémoire cache sert à accélérer les accès en mémoire en allant chercher les données dans une mémoire matériel plus petite mais plus proche, donc plus rapide. Il faut donc interface, avec un simple bus, les accès entre l'utilisateur (agent) et la mémoire externe (ex: DDR).
 
 \section{Mémoire Cache}
 \subsection{Mémoire}
@@ -72,11 +72,11 @@ La mémoire se sépare en plusieurs attributs qui sont les suivants:\\
 \begin{itemize}
 	\item Data (vecteur): il s'agit des données
 	\item Tag  (vecteur): permet de vérifier si le bloque mémoire rechercher est juste
-	\item Valid (bit): indique si la ligne en cache est initialisé
+	\item Valid (bit): indique si la ligne en cache est initialisée
 	\item Dirty (bit): indique si il y a eu un accès écriture dans la ligne\\
 \end{itemize}
 
-Pour chaque attributs, nous avons un tableau de la taille du nombre de ligne en cache que l'on accédera grâce à l'index retrouvé par l'adresse rechercher par l'agent.
+Pour chaque attribut, nous avons un tableau de la taille du nombre de ligne en cache que l'on accédera grâce à l'index retrouvé par l'adresse recherchée par l'agent.
 
 \newpage
 
@@ -93,11 +93,11 @@ Pour représenter le fonctionnement de la cache, nous sommes parties d'une machi
 
 On commence tout d'abord par une initialisation des différents attributs de la cache. Il s'agit notamment de mettre les bits \texttt{valid} et \texttt{dirty} à 0 pour indiquer que la cache est vide et qu'elle doit donc être rempli.\\
 
-Ensuite, dans \texttt{wait for demand}, on attend un signal de lecture ou écriture (\texttt{rd} ou \texttt{wr}). On est après redirigé dans la partie concerner.
+Ensuite, dans \texttt{wait for demand}, on attend un signal de lecture ou écriture (\texttt{rd} ou \texttt{wr}).On active le signal \texttt{busy} pour indiquer qu'on est occupé et on redirige dans la partie concerner. Il sera désactiver une fois l'action finit.
 
 \subsubsection{Lecture}
-Pour la lecture, on vérifie d'abord s'il y a un hit. Pour cela, on vérifie si le tag trouvé via l'adresse correspond à celui en cache et que la ligne est valide.
-Si la réponse est positive, on récupère directement la valeur dans la mémoire cache sinon, on doit chercher en mémoire d'abord.
+Pour la lecture, on vérifie d'abord s'il y a un hit. Pour cela, on regarde si le tag trouvé via l'adresse correspond à celui en cache et que la ligne est valide.
+Si la réponse est positive, on récupère directement la valeur dans la mémoire cache sinon, on doit chercher en mémoire d'abord. Avant de mettre à jour la ligne de la cache, on vérifie que la ligne n'est pas \texttt{dirty} si le tag est différent. Cela veut dire qu'il faut d'abord faire une écriture en mémoire avant de lire afin d'éviter les incohérences dans le futur.
 L'accès en mémoire se fait à chaque fois en burst et de la manière suivante:
 
 \begin{center}
@@ -106,7 +106,7 @@ L'accès en mémoire se fait à chaque fois en burst et de la manière suivante:
 
 \end{center}
 
-On attend tout d'abord sur le busy car il se peut que la mémoire soit occupé lorsqu'on veut l’accéder. Une fois la mémoire libre, on lui demande les données, on vérifie qu'elles soit prêtent et les enregistres. On vérifie que la mémoire à finit le transfère via un compteur que l'on incrémente à chaque fois qu'une donnée a été récupérer avec succès.
+On attend tout d'abord sur le busy car il se peut que la mémoire soit occupé lorsqu'on veut l’accéder. Une fois la mémoire libre, on lui demande les données, on vérifie qu'elles soient prêtes via le \texttt{dready} et les enregistres. On regarde que la mémoire à finit le transfère via un compteur que l'on incrémente à chaque fois qu'une donnée a été récupéré avec succès.
 
 \subsubsection{Écriture}
 Pour l'écriture, on doit d'abord vérifier que la ligne à écrire contient le bon tag et dans le cas contraire qu'elle n'est pas \texttt{dirty}. Dans le cas où la réponse est négative, il faut écrire dans la mémoire pour la mettre à jour avant de changer le contenu de la cache car le bloque mémoire accédé sera différent.
