@@ -55,8 +55,10 @@ begin
   
   process
     begin
-      memory <= (others => (others => '0'));
-      
+      if (reset_i = '1') then
+        memory <= (others => (others => '0'));
+      end if;      
+
       wait until rising_edge(clk_i);
       mem_o.busy <= '0';
       mem_o.dready <= '0';
@@ -70,7 +72,7 @@ report LF & "____MEM_WRITE !" & LF;
             memory(to_integer(unsigned(mem_i.addr(7 downto 0)))) <= mem_i.data;
             mem_o.busy <= '0';
           else -- Ecriture en burst
-            for i in 0 to to_integer(unsigned(mem_i.burst_range)) loop
+            for i in 0 to to_integer(unsigned(mem_i.burst_range))-1 loop
               mem_o.busy <= '1';
               for i in 0 to READ_LATENCY_CLKS loop -- Simulation de latence
                 wait until rising_edge(clk_i);
@@ -78,7 +80,7 @@ report LF & "____MEM_WRITE !" & LF;
               memory(to_integer(unsigned(mem_i.addr(7 downto 0)))+i) <= mem_i.data;
               report "_____MEM: Ecriture de" & LF &
                 "Valeur   : " & to_bstring(mem_i.data) & LF &
-                "Adresse : " & to_bstring(mem_i.addr(7 downto 0));
+                "Adresse : " & to_bstring(unsigned(mem_i.addr(7 downto 0))+i);
               mem_o.busy <= '0';
               wait until rising_edge(clk_i);
             end loop;
@@ -94,12 +96,15 @@ report LF & "____MEM_WRITE !" & LF;
             mem_o.data <= memory(to_integer(unsigned(mem_i.addr(7 downto 0))));
             mem_o.dready <= '1';
           else -- Lecture en burst
-            for i in 0 to to_integer(unsigned(mem_i.burst_range)) loop
+            for i in 0 to to_integer(unsigned(mem_i.burst_range))-1 loop
               mem_o.dready <= '0';
               mem_o.busy <= '1';
               for i in 0 to READ_LATENCY_CLKS loop -- Simulation de latence
                 wait until rising_edge(clk_i);
               end loop;
+              report "_____MEM: Lecture de" & LF &
+                "Valeur   : " & to_bstring(memory(to_integer(unsigned(mem_i.addr(7 downto 0)))+i)) & LF &
+                "Adresse : " & to_bstring(unsigned(mem_i.addr(7 downto 0))+i);
               mem_o.busy <= '0';
               mem_o.data <= memory(to_integer(unsigned(mem_i.addr(7 downto 0)))+i);
               mem_o.dready <= '1';

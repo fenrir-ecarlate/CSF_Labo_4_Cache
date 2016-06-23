@@ -185,12 +185,6 @@ begin
             if (tags(index_v) = cache_tag_s and valid_bits(index_v) = '1') then
               next_state_s <= GIVE_DATA;
             else
-              burst_counter_s <= (others => '0');
-              mem_o.wr <= '0';
-              mem_o.rd <= '1';
-              mem_o.burst <= '1';
-              mem_o.addr <= fsm_addr_in_s(ADDR_SIZE-1 downto OFFSET_SIZE) & std_logic_vector(to_unsigned(0, OFFSET_SIZE)); -- Adresse de la ligne de cache voulue
-              mem_o.burst_range <= std_logic_vector(to_unsigned(NUMBER_OF_WORDS_IN_CACHE_LINE, mem_o.burst_range'length));
               next_state_s <= READ_BURST_1;
             end if;
           
@@ -198,12 +192,19 @@ begin
             if (mem_i.busy = '1') then -- Attente sur la mémoire
                 next_state_s <= READ_BURST_1;
             else
+                burst_counter_s <= (others => '0');
+                mem_o.wr <= '0';
+                mem_o.rd <= '1';
+                mem_o.burst <= '1';
+                mem_o.addr <= fsm_addr_in_s(ADDR_SIZE-1 downto OFFSET_SIZE) & std_logic_vector(to_unsigned(0, OFFSET_SIZE)); -- Adresse de la ligne de cache voulue
+                mem_o.burst_range <= std_logic_vector(to_unsigned(NUMBER_OF_WORDS_IN_CACHE_LINE, mem_o.burst_range'length));
                 next_state_s <= READ_BURST_2;
             end if;
               
           when READ_BURST_2 =>
+            mem_o.rd <= '0'; -- La lecture burst a été lancée on peut mettre le signal à zéro
             if (burst_counter_s = NUMBER_OF_WORDS_IN_CACHE_LINE) then
-                mem_o.rd <= '0'; -- Fini de lire
+                -- Fini de lire
                 valid_bits(index_v) <= '1'; -- Les données sont maintenant valides
                 tags(index_v) <= cache_tag_s; -- màj du tag
                 next_state_s <= GIVE_DATA;
@@ -241,6 +242,7 @@ begin
             end if;
           
           when WRITE_BURST_1 =>
+            mem_o.wr <= '0'; -- Le write en burst a été lancé
             if (mem_i.busy = '1') then
                 next_state_s <= WRITE_BURST_1;
             else
@@ -258,12 +260,6 @@ begin
             if (tags(index_v) = cache_tag_s and valid_bits(index_v) = '1') then
               next_state_s <= WRITE_CACHE_WORD;
             else
-              burst_counter_s <= (others => '0');
-              mem_o.wr <= '0';
-              mem_o.rd <= '1';
-              mem_o.burst <= '1';
-              mem_o.addr <= fsm_addr_in_s(ADDR_SIZE-1 downto OFFSET_SIZE) & std_logic_vector(to_unsigned(0, OFFSET_SIZE)); -- Adresse de la ligne de cache voulue
-              mem_o.burst_range <= std_logic_vector(to_unsigned(NUMBER_OF_WORDS_IN_CACHE_LINE, mem_o.burst_range'length));
               next_state_s <= READ_BEFORE_WRITE_1;
             end if;
             
@@ -271,12 +267,19 @@ begin
             if (mem_i.busy = '1') then -- Attente sur la mémoire
                 next_state_s <= READ_BEFORE_WRITE_1;
             else
-                next_state_s <= READ_BEFORE_WRITE_2;
+              burst_counter_s <= (others => '0');
+              mem_o.wr <= '0';
+              mem_o.rd <= '1';
+              mem_o.burst <= '1';
+              mem_o.addr <= fsm_addr_in_s(ADDR_SIZE-1 downto OFFSET_SIZE) & std_logic_vector(to_unsigned(0, OFFSET_SIZE)); -- Adresse de la ligne de cache voulue
+              mem_o.burst_range <= std_logic_vector(to_unsigned(NUMBER_OF_WORDS_IN_CACHE_LINE, mem_o.burst_range'length));
+              next_state_s <= READ_BEFORE_WRITE_2;
             end if;
             
           when READ_BEFORE_WRITE_2 => 
+            mem_o.rd <= '0'; -- La lecture burst a été lancée on peut mettre le signal à zéro
             if (burst_counter_s = NUMBER_OF_WORDS_IN_CACHE_LINE) then
-                mem_o.rd <= '0'; -- Fini de lire
+                -- Fini de lire
                 valid_bits(index_v) <= '1'; -- Mise à jour du valid
                 tags(index_v) <= cache_tag_s; -- Mise à jour du tag
                 next_state_s <= WRITE_CACHE_WORD;
