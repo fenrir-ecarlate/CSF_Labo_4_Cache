@@ -69,7 +69,7 @@ Lors de ce laboratoire nous avons implémenté une mémoire cache. Mémoire qui 
 \subsection{Mémoire}
 Pour ce laboiratoire nous avons implémenté la mémoire cache comme une cache à correspondance directe avec des lignes de 16 mots, ceci s'adapte en fonction des paramètres génériques (si l'adresse devient plus longue et la taille du tag et de l'index ne changent pas les lignes auront plus de mots. Nous avons aussi testé avec des tag et index plus grands qui nous donnaient des lignes de cache de 2 mots, cela fonctionnait aussi, mais c'était bien sur moins performant...).
 
-La mémoire se sépare en plusieurs lignes qui ont les attributs suivants :
+La mémoire se sépare en plusieurs lignes qui ont les attributs suivants :\\
 
 \begin{itemize}
 	\item Data (vecteur): il s'agit des donnée (dans le tests bench 16 mots par ligne).
@@ -83,7 +83,7 @@ Pour chaque attribut, nous avons un tableau de la taille du nombre de lignes de 
 \newpage
 
 \subsection{Contrôleur}
-Pour le contrôleur de la mémoire cache nous avont créé une machine sequentielle synchrone.
+Pour le contrôleur de la mémoire cache nous avons créé une machine séquentielle synchrone.
 
 \begin{center}
 
@@ -134,22 +134,28 @@ Pour la mémoire simulée nous avons créé une petite mémoire de 256*8bits qui
 
 Le fichier correspondant est memory\_emul\_tb.vhd 
 \section{Banc Test}
-Pour notre banc test nous avons vérifié le bon fonctionnement de la mémoire cache pour :
+Pour notre banc test nous avons vérifié le bon fonctionnement de la mémoire cache pour :\\
 \begin{itemize}
 \item Des cas de bord :
-Ecrire après une écriture, on devrait voir que la seconde écriture se fait bien plus vite car on n'a pas besoin d'aller chercher la ligne en mémoire. On voit bien dans le chronogramme que le premier accès prends plus de temps (lecture burst de la ligne).
-Ecrire dans une adresse puis dans la suivante qui est dans la même ligne, on voit ici que la deuxième lecture est plus rapide, pour les mêmes raisons que ci-dessus.
-Lire la mémoire à une adresse pas encore en cache puis l'adresse suivante, on voit que la première lecture est lente puis la deuxième très rapide car la ligne est déjà cachée.
-Ecrire à deux adresses qui donnent le même index dans la cache (on a donc une collision) et voir que les données qui étaient présentes dans la cache se trouvent bien stockées en mémoire avant que la cache soit mise à jour.
+Écrire après une écriture, on devrait voir que la seconde écriture se fait bien plus vite car on n'a pas besoin d'aller chercher la ligne en mémoire. On voit bien dans le chronogramme que le premier accès prends plus de temps (lecture burst de la ligne).\\
+Écrire dans une adresse puis dans la suivante qui est dans la même ligne, on voit ici que la deuxième lecture est plus rapide, pour les mêmes raisons que ci-dessus.
+Lire la mémoire à une adresse pas encore en cache puis l'adresse suivante, on voit que la première lecture est lente puis la deuxième très rapide car la ligne est déjà cachée.\\
+Écrire à deux adresses qui donnent le même index dans la cache (on a donc une collision) et voir que les données qui étaient présentes dans la cache se trouvent bien stockées en mémoire avant que la cache soit mise à jour.\\
+
 \item Un parcours ascendant de toutes les adresses de la mémoire simulée :
-On parcourt ici toute la plage d'adresse en écriture puis en lecture, on va voir que la cache sera mis à jour en conséquence et qu'on ne perds aucune information, tout est stocké dans la cache ou la mémoire le cas échéant. Après qu'une ligne a du être mise à jour dans la cache tous les accès suivants à cette même ligne sont rapides. Ce test provoque aussi des collisions, faire toutes les écritures puis tout relire nous permet de nous assurer qu'aucune donnée n'a été perdue (car il y a forcément des flush de la cache vers la mémoire à cause des collisions).
+On parcourt ici toute la plage d'adresse en écriture puis en lecture, on va voir que la cache sera mis à jour en conséquence et qu'on ne perds aucune information, tout est stocké dans la cache ou la mémoire le cas échéant. Après qu'une ligne a du être mise à jour dans la cache tous les accès suivants à cette même ligne sont rapides. Ce test provoque aussi des collisions, faire toutes les écritures puis tout relire nous permet de nous assurer qu'aucune donnée n'a été perdue (car il y a forcément des flush de la cache vers la mémoire à cause des collisions).\\
+
 \item Un parcours descendant de toutes les adresses de la mémoire simulée :
-Même idée que le test ci-dessus mais cette fois ci on devra chercher les lignes en mémoire depuis l'adresse de poids fort et on peut voir que cela fonctionne tout aussi bien. Les accès aux adresses en dessous sont donc plus rapides, jusqu'à ce que l'on doive recharger une nouvelle ligne de la mémoire vers la cache. On voit aussi que toutes les données sont préservées.
+Même idée que le test ci-dessus mais cette fois ci on devra chercher les lignes en mémoire depuis l'adresse de poids fort et on peut voir que cela fonctionne tout aussi bien. Les accès aux adresses en dessous sont donc plus rapides, jusqu'à ce que l'on doive recharger une nouvelle ligne de la mémoire vers la cache. On voit aussi que toutes les données sont préservées.\\
+
 \item Des accès locaux successifs :
-On essaie de simuler ici un usage un peu normal de la cache, plusieurs écritures successives à des lignes proches les unes des autres, puis après toutes ces écritures on obsrve que les données sont bien correctes. On peut voir qu'une fois la ligne chargée en cache (16 mots et on accède 10 mots) qu'on ne travaille que dans la cache et qu'il n'y a pas d'accès à la mémoire ici. Tout est très rapide et on peut le voir dans le chronogramme.
+On essaie de simuler ici un usage un peu normal de la cache, plusieurs écritures successives à des lignes proches les unes des autres, puis après toutes ces écritures on observe que les données sont bien correctes. On peut voir qu'une fois la ligne chargée en cache (16 mots et on accède 10 mots) qu'on ne travaille que dans la cache et qu'il n'y a pas d'accès à la mémoire ici. Tout est très rapide et on peut le voir dans le chronogramme.\\
 \end{itemize}
 
 La procédure control\_read nous permet de vérifier la cohérence des données pour une adresse donnée en cache, il y aura une failure dans le cas contraire. (il aurait été bien de faire une collection des erreurs et indiquer à la fin du test bench le nombre d'erreurs et les adresses) mais pour l'instant nous avons simplement fait générer une failure.
+
+\section{Synthèse}
+Notre implémentation est synthétisable, la synthèse a été effectuée avec Quartus II. Il faut toutefois faire attention à définir les tailles des vecteurs dans les records du package cmf\_pkg.vhd sans cela la synthèse ne passera pas.
 
 \section{Conclusion}
 Implémenter une mémoire cache n'était pas si simple que ça, il a fallu beaucoup penser au cas de bord comme les collisions par exemple afin de ne pas faire d'erreurs. Ce n'est pas évident de prévoir qu'une lecture demandera de stocker des informations en mémoire par exemple... Une fois tous les cas de bord étudiés, la machine d'état élaborée en conséquence, le test bench a pu nous faire découvrir les failles restantes dans notre design. Avec les latences choisies (env 10 cycles d'horloge par data de la ram) il est impressionnant de voir la différence de temps entre un cache miss et un hit. Lorsque le contrôleur doit aller chercher la ligne en mémoire il lui fait plus de 160 cycles (16 mots * 10cycles plus tous les cycles de contrôle) donc environ 200 cycles, et après une fois que la ligne est chargée, tous les accès (en lecture comme en écriture) se font en quelques cycles (<10). Sur le chronogramme on voit réellement la différence. Les attentes sur la mémoire sont bien lent ! D'où l'avantage énorme d'avoir une mémoire cache.

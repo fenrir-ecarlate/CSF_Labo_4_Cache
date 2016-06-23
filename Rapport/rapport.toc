@@ -6,4 +6,6 @@
 \contentsline {subsubsection}{\numberline {2.2.1}Lecture}{4}{subsubsection.2.2.1}
 \contentsline {subsubsection}{\numberline {2.2.2}\IeC {\'E}criture}{4}{subsubsection.2.2.2}
 \contentsline {section}{\numberline {3}M\IeC {\'e}moire simul\IeC {\'e}e}{5}{section.3}
-\contentsline {section}{\numberline {4}Conclusion}{5}{section.4}
+\contentsline {section}{\numberline {4}Banc Test}{5}{section.4}
+\contentsline {section}{\numberline {5}Synth\IeC {\`e}se}{6}{section.5}
+\contentsline {section}{\numberline {6}Conclusion}{6}{section.6}
