@@ -75,7 +75,8 @@ architecture struct of cache_memory is
         RESET, 
         INIT, 
         WAIT_FOR_DEMAND, 
-        READ_CACHE, 
+        READ_CACHE,
+        WRITE_BEFORE_READ, -- A implémenter
         READ_BURST_1,
         READ_BURST_2,
         GIVE_DATA, 
@@ -184,10 +185,37 @@ begin
             -- vérifie s'il y a hit
             if (tags(index_v) = cache_tag_s and valid_bits(index_v) = '1') then
               next_state_s <= GIVE_DATA;
+            elsif (tags(index_v) /= cache_tag_s and valid_bits(index_v) = '1' and dirty_bits(index_v) = '1') then
+              if (mem_i.busy = '1') then
+                next_state_s <= READ_CACHE;
+              else
+                mem_o.wr <= '1';
+                mem_o.rd <= '0';
+                mem_o.burst <= '1';
+                mem_o.addr <= tags(index_v) & cache_index_s & std_logic_vector(to_unsigned(0, OFFSET_SIZE)); -- Addresse de l'ancienne ligne de cache
+                mem_o.data <= cache(index_v)((to_integer(burst_counter_s)+1) * DATA_SIZE - 1 downto to_integer(burst_counter_s) * DATA_SIZE);
+                mem_o.burst_range <= std_logic_vector(to_unsigned(NUMBER_OF_WORDS_IN_CACHE_LINE, mem_o.burst_range'length));
+                burst_counter_s <= (others => '0');
+                next_state_s <= WRITE_BEFORE_READ;
+              end if;
             else
               next_state_s <= READ_BURST_1;
             end if;
-          
+
+          when WRITE_BEFORE_READ =>
+            mem_o.wr <= '0'; -- Le write en burst a été lancé
+            if (mem_i.busy = '1') then
+                next_state_s <= WRITE_BEFORE_READ;
+            else
+                if (burst_counter_s = NUMBER_OF_WORDS_IN_CACHE_LINE) then
+                    next_state_s <= READ_BURST_1;
+                else
+                    mem_o.data <= cache(index_v)((to_integer(burst_counter_s)+1) * DATA_SIZE - 1 downto to_integer(burst_counter_s) * DATA_SIZE);
+                    burst_counter_s <= burst_counter_s + 1;
+                    next_state_s <= WRITE_BEFORE_READ;
+                end if;
+            end if;
+            
           when READ_BURST_1 =>
             if (mem_i.busy = '1') then -- Attente sur la mémoire
                 next_state_s <= READ_BURST_1;
